@@ -313,7 +313,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Kind**：candidate
 - **Condition**：`(entry − nearest_support.high) / entry > v12.max_distance_pct`
   - `nearest_support` 为 entry 下方最近的支撑区间
-  - 默认值等于 `veto.max_stop_pct`（10%）
+  - `v12.max_distance_pct` 默认 10%，与 `veto.max_stop_pct` 取值相同但独立配置
 - **Output**：VETO
 - **Automation**：auto
 - **Note**：与 V05 的区别在于，V05 看候选自带的 stop，V12 看结构支撑的距离。止损设得紧、但下方没有结构支撑时，V12 仍然否决。
@@ -521,61 +521,45 @@ Advice 只提醒，不影响结论。
 
 # 6. Parameters
 
-对应 `config/config.yaml`。**状态**：`已裁决`（用户决定）/ `source`（原文给出）/ `默认值`（原文未给出，待实盘校准）。
+对应 `config/config.yaml`，分组与顺序完全一致（由测试保证 yaml 与代码默认值相同）。
 
-| Key | 默认 | 状态 | 用于 | Source |
-| --- | --- | --- | --- | --- |
-| `veto.min_rr` | 1.0 | 已裁决 | V14 | EP301§R14 |
-| `veto.preferred_rr` | 1.5 | 已裁决 | V14 | EP302 |
-| `veto.max_stop_pct` | 0.10 | 已裁决 | V05 | EP301§R05 |
-| `universe.min_market_cap` | 5e9 | 已裁决 | V10（WARN） | EP301§R10, EP302 |
-| `recent.lookback_days` | 20 | 默认值 | P-NEWLOW / P-NEWHIGH | EP301§R01 |
-| `volume.shrink_ratio` | 1.0 | 已裁决 | P-VOL | EP010, EP301§R04 |
-| `volume.expand_ratio` | 1.0 | 已裁决 | P-VOL | EP010 |
-| `rsi.periods` | [6, 24] | source | P-RSI | EP301§R15 |
-| `v15.rsi_fast_max` | 90 | source | V15 | EP301§R15 |
-| `v16.rsi_overbought` | 80 | source | V16 | EP301§R16 |
-| `s09.rsi_oversold` | 20 | 已裁决 | S09 | EP302§B9 |
-| `band68.max_strike_gap_pct` | 0.02 | source | P-BAND68 | EP189 |
-| `band68.expiry` | monthly | 默认值 | P-BAND68 | EP189 |
-| `recent.break_days` | 2 | source | V02, V03 | EP301§R02 |
-| `v07.earnings_window_days` | 2 | source | V07 | EP301§R07 |
-| `v07.min_drop_pct` | 0.03 | 默认值 | V07 | — |
-| `v08.cooldown_days` | 5 | 默认值 | V08 | EP301§R08（"数日"） |
-| `v12.max_distance_pct` | = `veto.max_stop_pct` | 默认值 | V12 | EP301§R12 |
-| `v13.min_room_pct` | 0.02 | 默认值 | V13 | — |
-| `stop.buffer_pct` | 0.01 | source | 所有 Setup | EP150（预留 1–2%） |
-| `swing.k` | 2 | 默认值 | P-SWING | — |
-| `divergence.max_gap_days` | 30 | 默认值 | P-DIVERGENCE | — |
-| `candle.short_shadow_ratio` | 0.1 | 默认值 | P-CANDLE | — |
-| `s01.lookback_days` | 20 | 默认值 | S01 | — |
-| `s02.lookback_days` | 20 | 默认值 | S02 | — |
-| `s02.near_line_pct` | 0.03 | 默认值 | S02 | — |
-| `s04.lookback_days` | 20 | 默认值 | S04 | — |
-| `s04.touch_pct` | 0.02 | 默认值 | S04 | — |
-| `s05.min_streak` | 5 | 默认值 | S05 | — |
-| `s06.dry_ratio` | 0.6 | 默认值 | S06 | — |
+- **含义**：一句话说明，详情见"用于"列的规则条目。
+- **状态**：`已裁决`（用户决定）/ `source`（原文给出）/ `默认值`（原文未给出，待实盘校准）。
+- **Source**：原始出处，Source ID 见 AF §12.2。
 
-```yaml
-# config/config.yaml（初始）
-veto:
-  min_rr: 1.0
-  preferred_rr: 1.5
-  max_stop_pct: 0.10
-  disabled: []
-universe:
-  min_market_cap: 5.0e9
-recent:
-  lookback_days: 20
-  break_days: 2
-volume:
-  shrink_ratio: 1.0
-  expand_ratio: 1.0
-rsi:
-  periods: [6, 24]
-stop:
-  buffer_pct: 0.01
-```
+| Key | 默认 | 含义 | 状态 | 用于 | Source |
+| --- | --- | --- | --- | --- | --- |
+| `veto.min_rr` | 1.0 | 盈亏比低于此值 → VETO | 已裁决 | V14 | EP301§R14 |
+| `veto.preferred_rr` | 1.5 | 盈亏比低于此值 → WARN | 已裁决 | V14 | EP302 |
+| `veto.max_stop_pct` | 0.10 | 单笔止损幅度上限 | 已裁决 | V05 | EP301§R05 |
+| `veto.disabled` | [] | 实验时关闭的规则 ID | — | 全部 V | AF §17 |
+| `universe.min_market_cap` | 5.0e9 | 市值低于此值 → WARN（美元） | 已裁决 | V10 | EP301§R10, EP302 |
+| `recent.lookback_days` | 20 | "近期"新低 / 新高的回看天数 | 默认值 | P-NEWLOW / P-NEWHIGH | EP301§R01 |
+| `recent.break_days` | 2 | "刚"破位的天数窗口 | source | V02, V03 | EP301§R02 |
+| `volume.shrink_ratio` | 1.0 | 两个量比都低于此值 = 缩量 | 已裁决 | P-VOL | EP010, EP301§R04 |
+| `volume.expand_ratio` | 1.0 | 两个量比都高于此值 = 放量 | 已裁决 | P-VOL | EP010 |
+| `rsi.periods` | [6, 24] | RSI 快线 / 慢线周期 | source | P-RSI | EP301§R15 |
+| `stop.buffer_pct` | 0.01 | 止损位额外预留，防扫损 | source | 所有 Setup | EP150（预留 1–2%） |
+| `band68.max_strike_gap_pct` | 0.02 | 最近行权价偏离收盘价上限 | source | P-BAND68 | EP189 |
+| `band68.expiry` | monthly | 使用的期权到期日 | 默认值 | P-BAND68 | EP189 |
+| `swing.k` | 2 | 摆动点左右各比较几根 K 线 | 默认值 | P-SWING | — |
+| `divergence.max_gap_days` | 30 | 背离两个摆动点的最大间隔 | 默认值 | P-DIVERGENCE | — |
+| `candle.short_shadow_ratio` | 0.1 | "极短影线"占全日振幅上限 | 默认值 | P-CANDLE | — |
+| `v07.earnings_window_days` | 2 | 距财报几个交易日内 | source | V07 | EP301§R07 |
+| `v07.min_drop_pct` | 0.03 | "异常下跌"的单日跌幅 | 默认值 | V07 | — |
+| `v08.cooldown_days` | 5 | 止损后回避天数 | 默认值 | V08 | EP301§R08（"数日"） |
+| `v12.max_distance_pct` | 0.10 | 入场价距下方支撑上限 | 默认值 | V12 | EP301§R12 |
+| `v13.min_room_pct` | 0.02 | 距上方下一阻力的最小空间 | 默认值 | V13 | — |
+| `v15.rsi_fast_max` | 90 | RSI-6 高于此值 → VETO | source | V15 | EP301§R15 |
+| `v16.rsi_overbought` | 80 | RSI-6 超买线 | source | V16 | EP301§R16 |
+| `s01.lookback_days` | 20 | 回看多少天内的突破 | 默认值 | S01 | — |
+| `s02.lookback_days` | 20 | 回看多少天内的趋势线突破 | 默认值 | S02 | — |
+| `s02.near_line_pct` | 0.03 | 收盘距趋势线多近算回踩 | 默认值 | S02 | — |
+| `s04.lookback_days` | 20 | 回看多少天内的颈线突破 | 默认值 | S04 | — |
+| `s04.touch_pct` | 0.02 | 最低价距颈线多近算触及 | 默认值 | S04 | — |
+| `s05.min_streak` | 5 | 最少连续收涨天数 | 默认值 | S05 | — |
+| `s06.dry_ratio` | 0.6 | "极度缩量"的量比上限 | 默认值 | S06 | — |
+| `s09.rsi_oversold` | 20 | RSI-6 超卖线 | 已裁决 | S09 | EP302§B9 |
 
 ---
 

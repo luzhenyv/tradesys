@@ -18,6 +18,7 @@
 8. 新增阈值裁决表，记录原始材料之间的冲突；已裁决：盈亏比 1.0 否决 / 1.5 警告、单笔止损 10%、市值 50 亿美元仅警告（§16）。
 9. 分时图内容（EP095 / EP111 / EP161）只作为备忘提醒，不转化为代码（§0、§19）。
 10. 新增第 8 条纪律"MVP 够用即可"：结构由人在 YAML 中画、机器只判定；实现分 full / simple / stub 三级；数据源只接 yfinance；代码规模软预算（§2、§10、§24）。
+11. Phase 0 落地后同步：包目录为仓库根下的 `tradesys/`（不使用 `src/` 布局）；`AnalysisContext` 用 `zones` / `lines` 取代 `structures`；`Candidate.rr` 改为由 entry / stop / target 计算的属性；新增 §26 Phase 1 计划（§7、§18、§24、§25、§26）。
 
 ---
 
@@ -117,7 +118,7 @@ Markdown Report
   - `simple`：近似算法，结果 `review=True`，报告标"⚠ 近似算法，需人工复核"
   - `stub`：占位，直接返回 `MANUAL` 并附一句提示
 - **一个真实数据源**。V1 只接 yfinance（外加测试用的 fake），IBKR 推迟到 V1.x。
-- **规模软预算**。`src/` 约 ≤ 1500 行；每个 V / S 规则文件约 ≤ 50 行。超出时先简化或降级为 `stub`，再考虑加代码。
+- **规模软预算**。`tradesys/` 包约 ≤ 1500 行；每个 V / S 规则文件约 ≤ 50 行。超出时先简化或降级为 `stub`，再考虑加代码。
 
 ---
 
@@ -164,7 +165,7 @@ features["rsi_6"]
 1. resolve as_of → session_date
 2. adapters 拉取数据（bars / chain / calendar / fundamental）
 3. features  ← bars
-4. structures ← bars + features + confirmed structures (YAML)
+4. zones / lines ← data/structures/<TICKER>.yaml
 5. ctx = AnalysisContext(...)
 6. context vetoes      evaluate(ctx)
 7. setups              evaluate(ctx) → list[Candidate]
@@ -282,7 +283,6 @@ class FeatureSet:
 | `FibLevels` | 某段涨幅的回撤位（38.2 / 50 / 61.8） | structure |
 | `BreakVerdict` | 对某 Zone / Line 的判定：`intact / broken / false_break`，**以收盘价为准**（EP272） | structure |
 | `PatternHit` | K 线形态命中 + 有效性排序（EP124），V1 只实现 3 种形态 | structure |
-| `StructureHit` | 以上结构对象的统一包装，带 evidence | structure |
 | `Candidate` | §18 | setups |
 | `RuleResult` | 见下 | vetoes / reminders |
 | `Band68` | ATM straddle 推导的 68% 区间 `[L, H]` + 到期日（EP189） | `band68.py` |
@@ -317,15 +317,16 @@ class AnalysisContext:
     ticker: str
     as_of: datetime
     session_date: date                 # 最近一个已完成交易日
-    bars: Bars
+    bars: Bars                         # 截止 session_date
     features: FeatureSet
-    structures: tuple[StructureHit, ...]
-    fundamental: Fundamental | None
-    next_earnings: date | None
-    band68: Band68 | None
-    journal: JournalSlice | None       # V1 可为 None，见 §21
     config: Config
     data_sources: Mapping[str, str]
+    zones: tuple[Zone, ...] = ()       # 来自 YAML（§10）
+    lines: tuple[Line, ...] = ()       # 来自 YAML（§10）
+    fundamental: Fundamental | None = None
+    next_earnings: date | None = None
+    band68: Band68 | None = None
+    journal: object | None = None      # JournalSlice，V1 未实现，见 §21
 ```
 
 原则：
@@ -544,7 +545,7 @@ Evidence        报告中展示的数值
 Source          EP301§R05（voice 原文位置）
 Status          draft | confirmed | implemented | deprecated
 Test Case       输入 → 期望输出（优先取自原始材料中的案例）
-Implementation  src/tradesys/vetoes/v05.py
+Implementation  tradesys/vetoes/v05.py
 ```
 
 ## 15.1 ID 映射
@@ -669,10 +670,13 @@ class Candidate:
     setup_id: str            # "S01"
     entry: float
     stop: float | None       # None → V05 必然 VETO
-    target: float | None
-    rr: float | None
+    target: float | None     # None → V14 返回 MANUAL
     grade: str
-    evidence: tuple[str, ...]
+    evidence: tuple[str, ...] = ()
+
+    @property
+    def rr(self) -> float | None:
+        """(target − entry) / (entry − stop)；缺 stop / target 时为 None。"""
 ```
 
 Candidate 必须可解释：Setup、Entry、Stop、Target、Why、Supporting evidence，以及每条 candidate veto 的结果。
@@ -778,7 +782,8 @@ tradesys/
 ├── data/
 │   ├── structures/            人工确认结构 YAML
 │   └── valuation/
-├── src/tradesys/
+├── pyproject.toml             uv 项目，Python 3.12
+├── tradesys/                  Python 包（不使用 src/ 布局）
 │   ├── models.py
 │   ├── protocols.py
 │   ├── config.py
@@ -790,6 +795,7 @@ tradesys/
 │   │   └── fake.py            测试用
 │   ├── features/
 │   │   ├── volume.py
+│   │   ├── price.py           近期新低 / 新高
 │   │   ├── candles.py
 │   │   ├── rsi.py
 │   │   ├── moving_average.py
@@ -807,9 +813,9 @@ tradesys/
 │   └── report/
 │       └── markdown.py
 ├── tests/
+│   ├── conftest.py
 │   ├── unit/
-│   ├── integration/
-│   └── fixtures/
+│   └── integration/
 ├── docs/
 │   ├── rules_spec.md
 │   ├── specs/
@@ -825,6 +831,8 @@ tradesys/
 ---
 
 # 25. Phase 0
+
+> 状态：**已完成**（2026-09-24）。29 个测试通过；`tradesys/` 包 577 行（非空 418 行）。
 
 Architecture Freeze 之后不再设计架构。Phase 0 只做四件事：
 
@@ -858,7 +866,62 @@ Output:  Band68 = [152.7, 177.1]
 
 ---
 
-# 26. 最终原则
+# 26. Phase 1 — 第一份可用的交易备忘录
+
+> 状态：未开始。
+> 目标：`tradesys analyze META` 输出一份完整的 Markdown 交易备忘录（§20）。
+> 约束：遵守 §2.8；`tradesys/` 包累计约 ≤ 1500 行。每一步都沿用 Phase 0 的写法：一条规则一个文件，engine 用字典注册，测试名写明原始案例。
+
+按顺序推进，每一步结束时 `pytest` 与 `ruff` 都通过。
+
+### ① yfinance adapter
+
+- `adapters/yahoo.py`，实现 `MarketDataSource`、`OptionChainSource`、`CalendarSource`、`FundamentalSource`。
+- 期权链只在 `as_of` 为当日盘后时返回，否则返回 `None`（§4）。
+- 新增依赖 yfinance。网络测试标记为 `network`，默认跳过。
+
+### ② 其余 full 规则
+
+- P-RSI；V04、V07、V10、V11、V15。
+- stub 规则：V06、V08、V09，以及 V10 的社群热度部分，返回固定文本的 MANUAL。
+- engine 接入 CANDIDATE_VETOES 的执行。
+
+### ③ YAML 结构
+
+- `structure/zones.py` 加载 `data/structures/<TICKER>.yaml`（Pydantic 校验），只保留 `confirmed_at ≤ session_date` 的条目。
+- 实现 V02、V03、V12、V13；没有结构时返回 MANUAL。
+
+### ④ simple 原语与 Setups
+
+- 原语：P-TREND、P-SWING、P-FIB、P-DIVERGENCE、P-CANDLE（3 种形态）。
+- 规则：V16；S01–S07、S09（S08 为 stub）。
+- simple 结果带 `review=True`。
+
+### ⑤ Markdown 报告
+
+- `report/markdown.py`，按 §20 的结构输出。
+- 包含 Band68 与 A-* 提醒、人工检查清单、simple / stub 规则清单。
+
+### ⑥ CLI
+
+- 新增依赖 Typer。
+- `tradesys analyze TICKER [--as-of ...]`：输出到 stdout，并可写入 `reports/`。
+
+### 不在 Phase 1
+
+- DuckDB 行情缓存：①完成后视 yfinance 的速度再决定。
+- Journal。
+- `tradesys experiment`。
+
+### 完成标准
+
+- 对任意一只主板股票运行 `tradesys analyze`，得到包含 §20 全部区块的备忘录。
+- V01–V16、S01–S09 都有测试。
+- 包规模在预算之内。
+
+---
+
+# 27. 最终原则
 
 > **这是一个把个人交易方法论从非结构化知识转换成可测试规则，并利用真实市场数据生成可解释交易备忘录的最小决策系统。**
 
