@@ -2,13 +2,13 @@
 
 > 方法论 Source of Truth。代码只是本文件的 executable implementation。
 > 架构约束见 `docs/specs/Architecture-Freeze-v1.md`（下称 AF）。
-> 版本：v0.2（初稿，全部规则 `draft`；按 AF §2.8 标注 Impl 等级）
+> 版本：v0.3（全部规则 `confirmed`；按 AF §2.8 标注 Impl 等级）
 
 ## 阅读约定
 
 - **ID**：`P-*` 原语，`V01–V18` 不买原则（EP301 顺序），`S01–S09` 买点（EP302 顺序），`A-*` 提醒。
 - **Source**：`EP301§R05` = 第 301 期第 5 条，`EP302§B3` = 第 302 期买点 3。Source ID 见 AF §12.2，对应文件为 `docs/sources/{voice,summaries}/2026-09-23-<id小写>-*.md`。
-- **Status**：全部为 `draft`。人工逐条核对 voice 原文后改为 `confirmed`（AF §13）。
+- **Status**：全部已 `confirmed`（已人工核对 voice 原文，AF §13）。以后修改任何规则，需先改回 `draft`，重新核对后再确认。
 - **Voice 核对**：`✔` 表示已在 voice 原文中找到依据；`待核对` 表示目前只依据 summary。
 - **Impl**（AF §2.8，MVP 够用即可）：
   - `full`：完整实现
@@ -50,7 +50,7 @@
   - `up`：`close[T] > MA20[T]` 且 `MA20[T] > MA20[T-5]`
   - 其他：`sideways`
 - **Source**：EP302 voice（"低点不断在创新低……收盘价不断的在创新低，这是很明显的下跌趋势"）。MA20 口径为默认实现，待校准。
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-SWING 摆动点
 
@@ -58,7 +58,7 @@
 - **Definition**：局部高点 / 低点，用于趋势线、旗形、背离。
 - **Condition**：`high[t]` 高于左右各 `swing.k` 根 K 线的 high 即为 swing high；low 同理。
 - **Default**：`swing.k = 2`
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-NEWLOW / P-NEWHIGH 近期新低 / 新高
 
@@ -69,7 +69,7 @@
   - `N = recent.lookback_days`（默认 20）
 - **Evidence**：同时输出"收盘价为 K 日新低 / 新高"的实际 K 值（向前数到第一个更低 / 更高收盘价为止）。
 - **Source**：EP301§R01 voice ✔（"和近期的收盘价对比，不是要和历史上最低价去对比"）
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-VOL 量能状态
 
@@ -83,7 +83,7 @@
   - 其他：`neutral`
 - **OpEx 折扣**：T 为月度期权交割周五（`is_opex_friday`）时，`expand` 在 evidence 中标注"OpEx 放量，有效性打折"（EP249）。不改变状态。
 - **Source**：EP010（前一日对比 + 均量对比）、EP301§R04 voice ✔（"和前5天比……和成交量的5日均线比"）、EP249
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-ZONE 支撑阻力区间
 
@@ -91,7 +91,7 @@
 - **Definition**：`Zone(low, high, kind)`，支撑阻力是**区间**而非单点。
 - **来源**：只来自 `data/structures/<TICKER>.yaml`（AF §10）。人在画区间时参考成交密集区、横盘平台（EP249：连续 2–5 日窄幅横盘）、前高前低；V1 不自动识别。
 - **Rule**：单一均线 / 单一趋势线 / 单一前低点的有效性打折（EP272），报告中注明。
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-BREAK 突破 / 破位判定（BreakVerdict）
 
@@ -110,14 +110,14 @@
   - 收盘 95 → `broken`
   - 次日收盘 105 → 仍为 `broken`（在阻力区内反抽）
   - 之后收盘 121 → `reclaimed`
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-FIB 斐波那契回撤
 
 - **Impl**：simple（摆动点取自 YAML；缺省用近 60 日最低收盘 → 最高收盘）
 - **Definition**：对一段上涨（swing low → swing high）计算 38.2 / 50 / 61.8% 回撤位。
 - **Rule**：回撤守在 61.8% 之上为良性回撤；**收盘价**跌破 61.8% → 上涨结构失效（EP150、EP301§R03）。
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-CANDLE K 线形态与有效性排序
 
@@ -141,7 +141,7 @@
   - 孕线始终视为中性预警。
 - **"极短影线"阈值**：`candle.short_shadow_ratio`（影线 ≤ 全日振幅的该比例，默认 0.1）。
 - **Source**：EP124（细分变体排序见 summary §三）。启明星、倒锤子线、孕线及见顶序列的其余形态在 V1 为 stub，报告提示人工看图
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-RSI / P-DIVERGENCE
 
@@ -151,7 +151,7 @@
   - 顶背离：最近两个 swing high 中，价格高点抬高（或持平），RSI-6 对应高点降低
   - 底背离：最近两个 swing low 中，价格低点降低（或持平），RSI-6 与 RSI-24 对应低点均抬高
   - 两个 swing 点间隔 ≤ `divergence.max_gap_days`（默认 30）
-- **Status**：draft
+- **Status**：confirmed
 
 ### P-BAND68 期权 68% 波动区间
 
@@ -167,7 +167,7 @@
 - **Test Case**：
   - TSLA：C=164.9，K=165，call 6.30 + put 6.00 → X=12.30，X'=12.20 → **[152.7, 177.1]**
   - NVDA：C=880，K=880，call 29.0 + put 27.1 → **[823.9, 936.1]**
-- **Status**：draft
+- **Status**：confirmed
 
 ---
 
@@ -186,7 +186,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Automation**：auto
 - **Source**：EP301§R01 · Voice 核对 ✔
 - **Test Case**：20 日收盘最低 100，T 收盘 99.5 → VETO；T 收盘 100.2 → PASS
-- **Status**：draft
+- **Status**：confirmed
 
 ### V02 刚跌破强支撑下沿
 
@@ -197,7 +197,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Automation**：auto（依赖 YAML 中的 Zone）
 - **Source**：EP301§R02 · Voice 核对 ✔（"刚出现这种情况的，或者是出现一两天"）
 - **Test Case**：支撑 100–120，T-1 收盘 99 → VETO
-- **Status**：draft
+- **Status**：confirmed
 
 ### V03 刚跌破上行趋势线 / 61.8% / 顶部颈线
 
@@ -210,7 +210,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：VETO
 - **Automation**：auto（趋势线 / 颈线来自 YAML）
 - **Source**：EP301§R03 · Voice 核对 ✔
-- **Status**：draft
+- **Status**：confirmed
 
 ### V04 缩量反弹
 
@@ -222,7 +222,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：VETO
 - **Automation**：auto
 - **Source**：EP301§R04 · Voice 核对 ✔
-- **Status**：draft
+- **Status**：confirmed
 
 ### V05 止损无法确定或超出承受力
 
@@ -237,7 +237,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Test Case**（EP301）：
   - 支撑 100–120，entry 119，stop 100 → 16% → VETO
   - entry 109，stop 100 → 8.3% → PASS
-- **Status**：draft
+- **Status**：confirmed
 
 ### V06 所属板块前一日跌幅前 10%
 
@@ -247,7 +247,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：MANUAL（V1 不做板块扫描）。报告提示用户自查。
 - **Automation**：manual
 - **Source**：EP301§R06 · Voice 核对 ✔
-- **Status**：draft
+- **Status**：confirmed
 
 ### V07 持续下跌且财报前异常放量加速
 
@@ -261,7 +261,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：VETO。"无明显利空消息"一项无法计算，evidence 中提示人工确认。
 - **Automation**：partial
 - **Source**：EP301§R07 · Voice 核对 ✔（"财报就是明天后天……突然间开始异常下跌，而且还放量了"）。`min_drop_pct` 为默认值，待校准。
-- **Status**：draft
+- **Status**：confirmed
 
 ### V08 刚被打止损
 
@@ -271,7 +271,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：V1 为 MANUAL（Journal 未实现）；Journal 引入后改为 auto
 - **Automation**：manual
 - **Source**：EP301§R08 · Voice 核对 ✔。`cooldown_days` 为默认值（原文"数日"）。
-- **Status**：draft
+- **Status**：confirmed
 
 ### V09 不熟悉基本面、仅因跌幅大而"看似便宜"
 
@@ -279,8 +279,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Kind**：context
 - **Output**：MANUAL（报告固定提问："你是否长期跟踪过该公司基本面？"）
 - **Automation**：manual
-- **Source**：EP301§R09 · Voice 待核对
-- **Status**：draft
+- **Source**：EP301§R09 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### V10 小市值 / OTC / 社群热度
 
@@ -293,7 +293,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
   - `Fundamental` 缺失 → UNAVAILABLE
 - **Automation**：partial
 - **Source**：EP301§R10、EP302 · Voice 核对 ✔（"100亿以内的相对来讲都缺乏一些稳定性"）
-- **Status**：draft
+- **Status**：confirmed
 
 ## 3.2 上涨过程（V11–V16）
 
@@ -304,8 +304,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Condition**：P-NEWHIGH 成立且 P-VOL[T] = `shrink`
 - **Output**：VETO
 - **Automation**：auto
-- **Source**：EP301§R11 · Voice 待核对
-- **Status**：draft
+- **Source**：EP301§R11 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### V12 突破后悬空、远离支撑
 
@@ -318,7 +318,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Automation**：auto
 - **Note**：与 V05 的区别在于，V05 看候选自带的 stop，V12 看结构支撑的距离。止损设得紧、但下方没有结构支撑时，V12 仍然否决。
 - **Source**：EP301§R12 · Voice 核对 ✔（"大涨百分之十几……远离了支撑，中间悬空状态的……不能买"，SNOW +16% 案例）
-- **Status**：draft
+- **Status**：confirmed
 
 ### V13 突破前阻力、但开盘直接顶入下一强阻力下沿
 
@@ -330,9 +330,9 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
   - `(R2.low − entry) / entry < v13.min_room_pct`（默认 2%）
 - **Output**：VETO
 - **Automation**：auto
-- **Source**：EP301§R13 · Voice 待核对
+- **Source**：EP301§R13 · Voice 核对 ✔
 - **Test Case**：价格 75，阻力 80–90 与 100–110；跳空开盘 99 → VETO
-- **Status**：draft
+- **Status**：confirmed
 
 ### V14 盈亏比不足
 
@@ -345,7 +345,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Automation**：auto
 - **Source**：EP301§R14、EP302 · Voice 核对 ✔（"你20块钱的止损上方至少要涨20块钱的预期，你才能够实现1:1"）
 - **Test Case**（EP301）：entry 125，stop 100，target 142 → rr 0.68 → VETO
-- **Status**：draft
+- **Status**：confirmed
 
 ### V15 RSI-6 > 90
 
@@ -354,8 +354,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Condition**：`RSI6[T] > v15.rsi_fast_max`（90）
 - **Output**：VETO
 - **Automation**：auto
-- **Source**：EP301§R15 · Voice 待核对
-- **Status**：draft
+- **Source**：EP301§R15 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### V16 RSI 超买区顶背离
 
@@ -364,8 +364,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Condition**：`RSI6[T] > v16.rsi_overbought`（80）且 P-DIVERGENCE 顶背离成立
 - **Output**：VETO
 - **Automation**：auto
-- **Source**：EP301§R16 · Voice 待核对
-- **Status**：draft
+- **Source**：EP301§R16 · Voice 核对 ✔
+- **Status**：confirmed
 
 ## 3.3 特殊场景（V17–V18）
 
@@ -397,8 +397,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
      - A：T 日在区间内出现止跌形态（P-CANDLE）
      - B：T 日出现放量阳线（`close > open` 且 `expand`）
 - **Stop**：`zone.low × (1 − stop.buffer_pct)`
-- **Source**：EP302§B1 · Voice 待核对（案例：META 638–680 区间）
-- **Status**：draft
+- **Source**：EP302§B1 · Voice 核对 ✔（案例：META 638–680 区间）
+- **Status**：confirmed
 
 ### S02 下行趋势线放量突破 → 缩量回踩不破
 
@@ -409,8 +409,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
   3. T 日缩量，且 `(close − line(T)) / close ≤ s02.near_line_pct`（默认 3%）
 - **Stop**：`line(T) × (1 − stop.buffer_pct)`
 - **Note**：激进模式（突破当日直接买）不实现。
-- **Source**：EP302§B2 · Voice 待核对
-- **Status**：draft
+- **Source**：EP302§B2 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### S03 上升旗形放量突破 A 线
 
@@ -424,9 +424,9 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Stop**：`B(T) × (1 − stop.buffer_pct)`
 - **Target**：T1 = 旗杆顶；T2 = entry + (旗杆顶 − 旗杆底)。Candidate.target 取 T1，T2 写入 evidence。
 - **Note**：B 线左侧买点（EP150）暂不实现，作为未来的 S03b。
-- **Source**：EP302§B3、EP150 · Voice 待核对
+- **Source**：EP302§B3、EP150 · Voice 核对 ✔
 - **Implementation**：`setups/s03.py`
-- **Status**：draft
+- **Status**：confirmed
 
 ### S04 W 底 / 头肩底颈线突破 → 回踩不破
 
@@ -437,8 +437,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
   3. T 日 `low` 触及颈线 `± s04.touch_pct`（默认 2%），且收盘在颈线之上
 - **Stop**：`neckline(T) × (1 − stop.buffer_pct)`
 - **分时**：原文"分时主动买盘强抵抗"只作为 A-INTRADAY 备忘，不参与判定。
-- **Source**：EP302§B4 · Voice 待核对
-- **Status**：draft
+- **Source**：EP302§B4 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### S05 强势连阳后首次阴线回踩 MA5 / MA10
 
@@ -451,7 +451,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Stop**：`low[T] × (1 − stop.buffer_pct)`
 - **Note**：原文强调此类止损常偏大，V05 / V14 会自然过滤。
 - **Source**：EP302§B5 · Voice 核对 ✔（"第一次下跌收跌，它就回踩到了最近的一条MA……连续几个阴跌跌下来，慢慢摸到均线，无效"）。`min_streak` 为默认值。
-- **Status**：draft
+- **Status**：confirmed
 
 ### S06 极度缩量后放量看涨吞没
 
@@ -461,8 +461,8 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
   2. T-1：`vs_prev < s06.dry_ratio` 且 `vs_ma5 < s06.dry_ratio`（默认 0.6，"极度缩量"）
   3. T：一级看涨吞没（实体包裹 T-1 全部实体与影线），P-VOL = `expand`，上影线 ≤ `candle.short_shadow_ratio`
 - **Stop**：`low[T] × (1 − stop.buffer_pct)`
-- **Source**：EP302§B6 · Voice 待核对
-- **Status**：draft
+- **Source**：EP302§B6 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### S07 缩量新低后放量锤子线
 
@@ -473,15 +473,15 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
   3. T：锤子线，P-VOL = `expand`
 - **Grade**：T 日收盘仍为近期新低 → `C`（中性，等待 1 个交易日）。此时 V01 也会否决。
 - **Stop**：`low[T] × (1 − stop.buffer_pct)`
-- **Source**：EP302§B7、EP124 · Voice 待核对
-- **Status**：draft
+- **Source**：EP302§B7、EP124 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### S08 板块突破日龙头放量大阳
 
 - **Impl**：stub（MANUAL）
 - **Output**：不产生 Candidate，报告中为 MANUAL 提示（V1 不做板块数据）
-- **Source**：EP302§B8
-- **Status**：draft
+- **Source**：EP302§B8 · Voice 核对 ✔
+- **Status**：confirmed
 
 ### S09 上行回撤不破 61.8% + RSI 超卖 + 底背离 + 止跌形态
 
@@ -493,9 +493,9 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
   4. T 日在支撑区域出现止跌形态（P-CANDLE，不要求排序）
 - **Stop**：`fib_618 × (1 − stop.buffer_pct)`
 - **Target**：回撤起点的 swing high
-- **⚠ Voice 口误**：原文"超卖是RSI大于80"应为口误（>80 是超买）。默认取 20，待确认。
+- **Note**：voice 原文"超卖是RSI大于80"为口误，按惯例取 RSI-6 < 20，已确认。
 - **Source**：EP302§B9 · Voice 核对 ✔（发现口误）
-- **Status**：draft
+- **Status**：confirmed
 
 ---
 
@@ -535,7 +535,7 @@ Advice 只提醒，不影响结论。
 | `rsi.periods` | [6, 24] | source | P-RSI | EP301§R15 |
 | `v15.rsi_fast_max` | 90 | source | V15 | EP301§R15 |
 | `v16.rsi_overbought` | 80 | source | V16 | EP301§R16 |
-| `s09.rsi_oversold` | 20 | 默认值（voice 口误） | S09 | EP302§B9 |
+| `s09.rsi_oversold` | 20 | 已裁决 | S09 | EP302§B9 |
 | `band68.max_strike_gap_pct` | 0.02 | source | P-BAND68 | EP189 |
 | `band68.expiry` | monthly | 默认值 | P-BAND68 | EP189 |
 | `recent.break_days` | 2 | source | V02, V03 | EP301§R02 |
@@ -594,9 +594,6 @@ stop:
 | EP292 | A-LEFT（V2） |
 | EP095 / EP111 / EP161 | A-INTRADAY（未入库） |
 
-## 待办
+## 后续工作
 
-1. 逐条核对 Voice 核对为"待核对"的规则：V09、V11、V13、V15、V16、S01–S04、S06、S07。
-2. 确认 S09 的 RSI 口误。
-3. 实盘校准所有"默认值"参数，校准后在 §6 中改为"已裁决"。
-4. 规则核对完毕后，把 Status 从 `draft` 改为 `confirmed`。
+- 实盘校准 §6 中状态为"默认值"的参数，校准后改为"已裁决"。
