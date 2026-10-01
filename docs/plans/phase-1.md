@@ -56,7 +56,7 @@
 
 ## ⑤ 报告 ✅（2026-10-02）
 
-- `render(out)` → Markdown。结论：上下文 VETO → 不买；否则 MANUAL/UNAVAILABLE → 待人工确认；有存活候选 → 可买；否则今日无买点。候选 VETO 只否决该买点。
+- `render(out)` → Markdown。结论只输出买或不买：上下文 VETO → 不买；存活候选 → 买（long）；否则不买。MANUAL 不改写结论。候选 VETO 只否决该买点。
 - 章节：结论、VETO、WARN、人工检查、候选买点、提醒（固定盘前盘后/开盘半小时、财报、Band68 与结构、流星线）、近似算法、未实现（仅 V/S 无 rule 块）。
 - `RunOutput.snapshot` 随 run 输出，故 `fetch | run | report PLAYBOOK` 可串联。`report PLAYBOOK` 也可直接读 Snapshot。
 

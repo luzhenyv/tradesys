@@ -39,8 +39,8 @@ tradesys/cli.py     薄壳：每个工具、执行器都能单独从命令行调
 
 `RuleStatus`：`PASS / VETO / WARN / MANUAL / UNAVAILABLE`。
 - `WARN` 不阻断，由用户决定。
-- `MANUAL`（系统无法判断）与 `UNAVAILABLE`（缺数据）不等于 `PASS`，报告中列为人工检查清单。
-- 结论：任一 VETO → 不买；否则存在 MANUAL / UNAVAILABLE → 待人工确认；否则附带 WARN 列表。
+- `MANUAL`（系统无法判断）与 `UNAVAILABLE`（缺数据）不等于 `PASS`，报告中列为人工检查清单，**不改写买/不买**。
+- 结论只输出 **买** 或 **不买**（本 playbook 不做空）：上下文 VETO → 不买；否则有候选未被候选 VETO 杀掉 → 买（long）；否则不买。
 
 ## 4. Playbook 与 rule 块
 

@@ -25,23 +25,32 @@ def _ctx(results: tuple[RuleResult, ...], status: RuleStatus) -> list[RuleResult
     return [r for r in results if r.status == status and r.candidate_id is None]
 
 
+def survivors(out: RunOutput) -> list[Candidate]:
+    killed = {r.candidate_id for r in out.results if r.status == RuleStatus.VETO and r.candidate_id}
+    return [c for c in out.candidates if c.id not in killed]
+
+
 def conclusion(out: RunOutput) -> str:
-    """上下文 VETO → 不买；否则 MANUAL/UNAVAILABLE → 待确认；有存活候选 → 可买；否则无买点。"""
+    """上下文 VETO → 不买；否则有存活候选 → 买（long）；否则不买。MANUAL 不改写结论。"""
     if _ctx(out.results, RuleStatus.VETO):
         return "不买"
-    killed = {r.candidate_id for r in out.results if r.status == RuleStatus.VETO and r.candidate_id}
-    alive = [c.id for c in out.candidates if c.id not in killed]
-    pending = [
-        r
-        for r in out.results
-        if r.status in (RuleStatus.MANUAL, RuleStatus.UNAVAILABLE)
-        and (r.candidate_id is None or r.candidate_id in alive)
+    if survivors(out):
+        return "买（long）"
+    return "不买"
+
+
+def _call(out: RunOutput) -> list[str]:
+    """报告头：买或不买，买则带上第一存活买点的价格。"""
+    if conclusion(out) != "买（long）":
+        return ["**不买**"]
+    c = survivors(out)[0]
+    rr = f"{c.rr:.2f}" if c.rr is not None else "—"
+    stop = c.stop if c.stop is not None else "—"
+    tgt = c.target if c.target is not None else "—"
+    return [
+        f"**买（long）**  {c.setup_id}  grade {c.grade}",
+        f"entry {c.entry}  stop {stop}  target {tgt}  rr {rr}",
     ]
-    if pending:
-        return "待人工确认"
-    if alive:
-        return "可买"
-    return "今日无买点"
 
 
 def _advice(snap: Snapshot) -> list[str]:
@@ -103,11 +112,9 @@ def render(out: RunOutput, playbook: str | Path | None = None) -> str:
     parts = [
         f"# {snap.ticker} · {snap.session_date}",
         "",
+        *_call(out),
+        "",
         f"收盘 {close} · as_of {snap.as_of.isoformat()}",
-        "",
-        "## 结论",
-        "",
-        f"**{conclusion(out)}**",
         "",
     ]
     for title, status in (

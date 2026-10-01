@@ -23,10 +23,11 @@ def test_context_veto_is_do_not_buy():
     assert "## VETO" in md
 
 
-def test_manual_without_veto_needs_human():
+def test_manual_checklist_does_not_block_do_not_buy():
     out = run(PLAYBOOK, CHOP)
-    assert conclusion(out) == "待人工确认"
+    assert conclusion(out) == "不买"
     md = render(out, PLAYBOOK)
+    assert "**不买**" in md
     assert "## 人工检查" in md
     assert "请在 YAML 中标注结构" in md
 
@@ -34,8 +35,10 @@ def test_manual_without_veto_needs_human():
 def test_report_lists_setup_candidate():
     closes = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 104.0]
     snap = fake_snapshot(make_bars(closes, lows=[*closes[:-1], 103.0]))
-    md = render(run(PLAYBOOK, snap), PLAYBOOK)
-    assert "## 候选买点" in md
+    out = run(PLAYBOOK, snap)
+    assert conclusion(out) == "买（long）"
+    md = render(out, PLAYBOOK)
+    assert "**买（long）**" in md
     assert "S05" in md
     assert "entry 104.0" in md
 
@@ -65,4 +68,4 @@ def test_cli_report_from_snapshot():
     result = runner.invoke(app, ["report", str(PLAYBOOK)], input=to_json(CHOP))
     assert result.exit_code == 0
     assert "# TEST ·" in result.stdout
-    assert "**待人工确认**" in result.stdout
+    assert "**不买**" in result.stdout
