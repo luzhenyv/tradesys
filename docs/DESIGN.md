@@ -72,7 +72,8 @@ when:                   # 列表中全部工具 hit=True 才命中（只有 AND�
 
 ## 6. 时点与数据约束
 
-- **盘后分析**：`as_of` 解析为 `session_date` = 最近一个已收盘的常规交易日（`calendar_utils.make_snapshot`）；盘中 as_of 取前一交易日，永不使用未完成日线。
+- **统一使用 UTC 时间**：系统内部所有时点（`Snapshot.as_of`、`Chain.as_of`、序列化 JSON）一律使用带时区的 UTC 时间。`tradesys fetch` 提供 `--tz` / `--timezone`（默认 UTC）允许用户按当地时区（如 `Asia/Shanghai`、`Asia/Tokyo`）输入时点，在 CLI 边界转换为 UTC。
+- **盘后分析**：`as_of` 先转为美东时间（ET），解析为 `session_date` = 最近一个已收盘的常规交易日（`calendar_utils.make_snapshot`）；盘中 as_of 取前一交易日，永不使用未完成日线。
 - **收盘价是唯一真值**：破位、突破、新低、新高一律以常规时段收盘价判定（EP272）。
 - **as_of 无未来数据**：adapter 不得返回 as_of 之后才可获得的数据。yfinance 的基本面、财报日、期权链只有"现在"的值，所以只在 as_of 为今天时获取，否则为空 → `missing` → UNAVAILABLE；不得用今天的数据冒充过去。
 - **结构由人画**：支撑阻力区间、趋势线、颈线、旗形 A/B 线来自 `data/structures/<TICKER>.yaml`，机器只判定，不自动识别。

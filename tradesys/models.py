@@ -55,7 +55,7 @@ class OptionQuote:
 class Chain:
     ticker: str
     expiry: date
-    as_of: datetime
+    as_of: datetime  # UTC 时间
     quotes: tuple[OptionQuote, ...]
 
 
@@ -95,7 +95,10 @@ class Line:
 
 @dataclass(frozen=True)
 class Snapshot:
-    """某只股票在 as_of 时点的全部输入。bars 已截止 session_date。"""
+    """某只股票在 as_of 时点的全部输入。
+
+    as_of 为带时区的 UTC 时间；session_date 为对应的美东交易日，bars 已截止 session_date。
+    """
 
     ticker: str
     as_of: datetime

@@ -68,7 +68,8 @@ def test_fetch_rejects_future_as_of_before_any_network_call():
     now = datetime(2026, 10, 1, 11, 0, tzinfo=ET)
     with pytest.raises(ValueError, match="晚于当前时间"):
         fetch_snapshot("META", datetime(2026, 10, 1, 17, 0, tzinfo=ET), now=now)
-    with pytest.raises(ValueError, match="晚于当前时间"):  # naive 视为美东时间
+    with pytest.raises(ValueError, match="晚于当前时间"):
+        # naive 视为 UTC（17:00 UTC = 13:00 EDT > 11:00 EDT）
         fetch_snapshot("META", datetime(2026, 10, 1, 17, 0), now=now)
 
 

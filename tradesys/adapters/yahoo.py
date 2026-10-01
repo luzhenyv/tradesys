@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 
 import yfinance as yf
 
-from tradesys.calendar_utils import ET, is_opex_friday, make_snapshot, to_et
+from tradesys.calendar_utils import is_opex_friday, make_snapshot, now_utc, to_et
 from tradesys.models import Bar, Bars, Chain, Fundamental, OptionQuote, Snapshot
 
 HISTORY_DAYS = 400
@@ -61,14 +61,14 @@ def chain_from_frames(
 def fetch_snapshot(
     ticker: str, as_of: datetime, expiry: str = "monthly", now: datetime | None = None
 ) -> Snapshot:
-    current = to_et(now or datetime.now(ET))
+    current = to_et(now or now_utc())
     local = to_et(as_of)
     if local > current:
         raise ValueError(f"as_of {as_of} 晚于当前时间，会把未收盘的日线当作已收盘")
     t = yf.Ticker(ticker)
-    end = as_of.date() + timedelta(days=1)  # history 的 end 不含当天
+    end = local.date() + timedelta(days=1)  # history 的 end 不含当天；使用美东交易日
     history = t.history(
-        start=as_of.date() - timedelta(days=HISTORY_DAYS), end=end, auto_adjust=False
+        start=local.date() - timedelta(days=HISTORY_DAYS), end=end, auto_adjust=False
     )
     bars = bars_from_history(ticker, history)
     session = make_snapshot(bars, as_of).session_date

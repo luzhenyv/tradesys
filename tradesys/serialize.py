@@ -7,9 +7,11 @@ import dataclasses
 import json
 import types
 import typing
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from enum import Enum
 from typing import Any
+
+from tradesys.calendar_utils import to_utc
 
 
 def to_plain(obj: Any) -> Any:
@@ -17,7 +19,9 @@ def to_plain(obj: Any) -> Any:
         return {f.name: to_plain(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
     if isinstance(obj, Enum):
         return obj.value
-    if isinstance(obj, datetime | date):
+    if isinstance(obj, datetime):
+        return to_utc(obj).isoformat()
+    if isinstance(obj, date):
         return obj.isoformat()
     if isinstance(obj, tuple | list):
         return [to_plain(x) for x in obj]
@@ -45,7 +49,8 @@ def from_plain(tp: Any, data: Any) -> Any:
         fields = {f.name for f in dataclasses.fields(tp)}
         return tp(**{k: from_plain(hints[k], v) for k, v in data.items() if k in fields})
     if tp is datetime:
-        return datetime.fromisoformat(data)
+        dt = datetime.fromisoformat(data)
+        return dt.astimezone(UTC) if dt.tzinfo else dt.replace(tzinfo=UTC)
     if tp is date:
         return date.fromisoformat(data)
     if isinstance(tp, type) and issubclass(tp, Enum):

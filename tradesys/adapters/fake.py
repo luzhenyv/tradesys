@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, timedelta
 
-from tradesys.calendar_utils import make_snapshot
+from tradesys.calendar_utils import ET, make_snapshot, to_utc
 from tradesys.models import Bar, Bars, Chain, OptionQuote, Snapshot
 
 
@@ -34,18 +34,19 @@ def make_chain(
     rows: list[tuple[float, float, float]],
     ticker: str = "TEST",
     expiry: date = date(2026, 4, 19),
-    as_of: datetime = datetime(2026, 4, 12, 16, 30),
+    as_of: datetime | None = None,
 ) -> Chain:
     """rows: (strike, call_ask, put_ask)。bid 置 0，本系统只用 ask。"""
     quotes = []
     for strike, call_ask, put_ask in rows:
         quotes.append(OptionQuote(strike, "call", 0.0, call_ask))
         quotes.append(OptionQuote(strike, "put", 0.0, put_ask))
-    return Chain(ticker, expiry, as_of, tuple(quotes))
+    when = to_utc(as_of or datetime(2026, 4, 12, 16, 30, tzinfo=ET))
+    return Chain(ticker, expiry, when, tuple(quotes))
 
 
 def fake_snapshot(bars: Bars, **inputs) -> Snapshot:
-    """as_of 取最后一根 bar 当天 17:00（已收盘）。"""
+    """as_of 取最后一根 bar 当天美东 17:00（已收盘）对应的 UTC 时间。"""
     last = bars.last.d
-    as_of = datetime(last.year, last.month, last.day, 17, 0)
+    as_of = to_utc(datetime(last.year, last.month, last.day, 17, 0, tzinfo=ET))
     return make_snapshot(bars, as_of, sources=("market=fake",), **inputs)

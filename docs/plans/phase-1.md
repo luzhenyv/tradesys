@@ -9,8 +9,9 @@
 ## ① 取数：yfinance ✅（2026-10-01）
 
 - `tradesys/adapters/yahoo.py`：`fetch_snapshot(ticker, as_of)` → Snapshot。唯一的网络 I/O，pandas 只在此文件内出现。
-- CLI：`tradesys fetch TICKER [--as-of 2026-09-30T17:00] [--expiry monthly|weekly]`。单次约 3 秒。
+- CLI：`tradesys fetch TICKER [--as-of 2026-09-30T17:00] [--tz Asia/Shanghai] [--expiry monthly|weekly]`。单次约 3 秒。
 - as_of 约束：
+  - 系统内部统一使用 UTC 时间（`Snapshot.as_of` 为 UTC aware datetime）。CLI 提供 `--tz` / `--timezone`（默认 UTC）供用户输入当地时间。美股交易日判定与 Yahoo 取数转换为美东时间（ET）。
   - 日线可回溯任意日期；as_of 晚于当前时间直接报错（防止把未收盘的日线当作已收盘）。
   - 基本面、财报日、期权链只有"现在"的数据，只在 as_of 为今天时获取，否则为空 → 相关规则 UNAVAILABLE。
   - 期权链还要求今天已收盘（收盘价与期权报价同属一天）。默认取下一个月度交割日，只保留收盘价 ±10% 的行权价。
