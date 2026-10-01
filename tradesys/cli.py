@@ -4,12 +4,14 @@ Snapshot 从 stdin 读入，结果以 JSON 写到 stdout，可用管道串联，
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
 import typer
 import yaml
 
+from tradesys.calendar_utils import ET
 from tradesys.models import Candidate, Snapshot
 from tradesys.run import run as run_playbook
 from tradesys.serialize import from_json, from_plain, to_json
@@ -28,6 +30,21 @@ def _candidates(path: Path | None) -> tuple[Candidate, ...]:
     if path is None:
         return ()
     return from_plain(tuple[Candidate, ...], yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
+@app.command()
+def fetch(
+    ticker: str,
+    as_of: Annotated[
+        str | None, typer.Option(help="美东时间，如 2026-10-01T17:00；默认现在")
+    ] = None,
+    expiry: Annotated[str, typer.Option(help="期权到期日：monthly | weekly")] = "monthly",
+) -> None:
+    """取数：输出 Snapshot JSON（唯一的网络 I/O）。"""
+    from tradesys.adapters.yahoo import fetch_snapshot  # 只有 fetch 需要加载 yfinance
+
+    when = datetime.fromisoformat(as_of) if as_of else datetime.now(ET)
+    typer.echo(to_json(fetch_snapshot(ticker.upper(), when, expiry)))
 
 
 @app.command()

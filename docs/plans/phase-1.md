@@ -1,18 +1,21 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：骨架已就绪（执行器、工具注册表、CLI、9 个 rule 块），以下步骤未开始。
+> 状态：① 已完成；② 起未开始。
 > 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-## ① 取数：yfinance
+## ① 取数：yfinance ✅（2026-10-01）
 
-- `tradesys/adapters/yahoo.py`：生成 Snapshot（bars、fundamental、next_earnings、chain）。唯一的网络 I/O。
-- 期权链只在 as_of 为当日盘后时取，否则为 None。
-- CLI 新增 `tradesys fetch TICKER [--as-of]`。
-- 新增依赖 yfinance。网络测试标记为 `network`，默认跳过。
-- 之后视速度决定是否加行情缓存。
+- `tradesys/adapters/yahoo.py`：`fetch_snapshot(ticker, as_of)` → Snapshot。唯一的网络 I/O，pandas 只在此文件内出现。
+- CLI：`tradesys fetch TICKER [--as-of 2026-09-30T17:00] [--expiry monthly|weekly]`。单次约 3 秒。
+- as_of 约束：
+  - 日线可回溯任意日期；as_of 晚于当前时间直接报错（防止把未收盘的日线当作已收盘）。
+  - 基本面、财报日、期权链只有"现在"的数据，只在 as_of 为今天时获取，否则为空 → 相关规则 UNAVAILABLE。
+  - 期权链还要求今天已收盘（收盘价与期权报价同属一天）。默认取下一个月度交割日，只保留收盘价 ±10% 的行权价。
+- 测试：转换函数用手工 DataFrame（含 EP189 TSLA 经期权链算出 Band68）；两个真实取数测试标记 `network`，默认跳过，`uv run pytest -m network` 运行。
+- 行情缓存：暂不需要（单次约 3 秒）。
 
 ## ② 只需行情的规则
 

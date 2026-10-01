@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pyyaml>=6",
     "typer>=0.12",
+    "yfinance>=1.7.0",
 ]
 
 [project.scripts]
@@ -27,6 +28,8 @@ packages = ["tradesys"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["network: 需要访问 Yahoo Finance，默认跳过；用 -m network 运行"]
+addopts = "-m 'not network'"
 
 [tool.ruff]
 line-length = 100

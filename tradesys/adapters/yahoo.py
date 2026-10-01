@@ -1,0 +1,98 @@
+"""yfinance 取数（DESIGN §6）：唯一的网络 I/O，输出 Snapshot。
+
+as_of 约束：日线可以回溯；基本面、财报日、期权链只有"现在"的数据，
+因此只在 as_of 为今天时获取，否则留空（依赖它们的规则得到 UNAVAILABLE）。
+期权链还要求 as_of 已收盘，使 Band68 的收盘价与期权报价属于同一交易日。
+pandas 只在本文件内出现，立即转换为 dataclass。
+"""
+
+from datetime import date, datetime, timedelta
+
+import yfinance as yf
+
+from tradesys.calendar_utils import ET, is_opex_friday, make_snapshot, to_et
+from tradesys.models import Bar, Bars, Chain, Fundamental, OptionQuote, Snapshot
+
+HISTORY_DAYS = 400
+STRIKE_WINDOW = 0.10  # 只保留收盘价 ±10% 的行权价；Band68 只用最近一档
+
+
+def bars_from_history(ticker: str, df) -> Bars:
+    """yfinance history（auto_adjust=False）→ Bars。丢弃缺收盘价的行。"""
+    rows = (r for r in df.itertuples() if r.Close == r.Close)  # NaN != NaN
+    return Bars(
+        ticker,
+        tuple(
+            Bar(
+                r.Index.date(),
+                float(r.Open),
+                float(r.High),
+                float(r.Low),
+                float(r.Close),
+                float(r.Volume),
+            )
+            for r in rows
+        ),
+    )
+
+
+def pick_expiry(expiries: tuple[str, ...], after: date, kind: str = "monthly") -> date | None:
+    """session_date 之后最近的到期日；monthly 只取每月第三个周五。"""
+    days = [date.fromisoformat(e) for e in expiries]
+    return min(
+        (d for d in days if d > after and (kind == "weekly" or is_opex_friday(d))), default=None
+    )
+
+
+def chain_from_frames(
+    ticker: str, expiry: date, as_of: datetime, calls, puts, close: float
+) -> Chain:
+    """option_chain 的 calls / puts → Chain，只保留 close ±STRIKE_WINDOW 的行权价。"""
+    lo, hi = close * (1 - STRIKE_WINDOW), close * (1 + STRIKE_WINDOW)
+    quotes = tuple(
+        OptionQuote(float(r.strike), kind, float(r.bid), float(r.ask))
+        for kind, df in (("call", calls), ("put", puts))
+        for r in df.itertuples()
+        if lo <= r.strike <= hi
+    )
+    return Chain(ticker, expiry, as_of, quotes)
+
+
+def fetch_snapshot(
+    ticker: str, as_of: datetime, expiry: str = "monthly", now: datetime | None = None
+) -> Snapshot:
+    current = to_et(now or datetime.now(ET))
+    local = to_et(as_of)
+    if local > current:
+        raise ValueError(f"as_of {as_of} 晚于当前时间，会把未收盘的日线当作已收盘")
+    t = yf.Ticker(ticker)
+    end = as_of.date() + timedelta(days=1)  # history 的 end 不含当天
+    history = t.history(
+        start=as_of.date() - timedelta(days=HISTORY_DAYS), end=end, auto_adjust=False
+    )
+    bars = bars_from_history(ticker, history)
+    session = make_snapshot(bars, as_of).session_date
+
+    if local.date() != current.date():
+        return make_snapshot(bars, as_of, sources=("market=yahoo", "其余=none（as_of 不是今天）"))
+
+    info = t.info
+    fundamental = Fundamental(info.get("marketCap"), info.get("exchange"), info.get("sector"))
+    earnings = min(
+        (d for d in (t.calendar or {}).get("Earnings Date", []) if d >= session), default=None
+    )
+    chain, options = None, "options=none（未收盘）"
+    if session == local.date() and (exp := pick_expiry(t.options, session, expiry)):
+        oc = t.option_chain(exp.isoformat())
+        chain = chain_from_frames(
+            ticker, exp, as_of, oc.calls, oc.puts, bars.upto(session).last.close
+        )
+        options = f"options=yahoo（{exp}）"
+    return make_snapshot(
+        bars,
+        as_of,
+        fundamental=fundamental,
+        next_earnings=earnings,
+        chain=chain,
+        sources=("market=yahoo", "fundamental=yahoo", options),
+    )

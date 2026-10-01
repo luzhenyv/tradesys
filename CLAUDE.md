@@ -25,8 +25,9 @@
 ## 常用命令
 
 ```bash
-uv run pytest -q
+uv run pytest -q              # 离线测试；联网测试用 -m network
 uv run ruff check . && uv run ruff format .
 uv run tradesys tools
+uv run tradesys fetch META > snap.json
 uv run tradesys run playbooks/technical.md < snap.json
 ```
