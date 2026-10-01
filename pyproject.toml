@@ -5,9 +5,12 @@ description = "Personal trading methodology as testable rules"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic>=2",
     "pyyaml>=6",
+    "typer>=0.12",
 ]
+
+[project.scripts]
+tradesys = "tradesys.cli:app"
 
 [dependency-groups]
 dev = [

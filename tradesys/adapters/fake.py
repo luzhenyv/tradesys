@@ -1,18 +1,9 @@
-"""测试用数据源：由简单的列表构造 Bars / Chain。"""
+"""测试用数据：由简单的列表构造 Bars / Chain / Snapshot。"""
 
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from tradesys.models import Bar, Bars, Chain, OptionQuote
-
-
-@dataclass(frozen=True)
-class FakeMarket:
-    bars: Bars
-    name: str = "fake"
-
-    def daily(self, ticker: str, start: date, end: date) -> Bars:
-        return Bars(ticker, tuple(b for b in self.bars.items if start <= b.d <= end))
+from tradesys.calendar_utils import make_snapshot
+from tradesys.models import Bar, Bars, Chain, OptionQuote, Snapshot
 
 
 def trading_days(start: date, n: int) -> list[date]:
@@ -31,7 +22,7 @@ def make_bars(
     ticker: str = "TEST",
     start: date = date(2026, 1, 5),
 ) -> Bars:
-    """open = high = low = close 的简化日线；需要影线时用 make_bar 单独构造。"""
+    """open = high = low = close 的简化日线。"""
     vols = volumes or [1_000_000.0] * len(closes)
     days = trading_days(start, len(closes))
     return Bars(
@@ -51,3 +42,10 @@ def make_chain(
         quotes.append(OptionQuote(strike, "call", 0.0, call_ask))
         quotes.append(OptionQuote(strike, "put", 0.0, put_ask))
     return Chain(ticker, expiry, as_of, tuple(quotes))
+
+
+def fake_snapshot(bars: Bars, **inputs) -> Snapshot:
+    """as_of 取最后一根 bar 当天 17:00（已收盘）。"""
+    last = bars.last.d
+    as_of = datetime(last.year, last.month, last.day, 17, 0)
+    return make_snapshot(bars, as_of, sources=("market=fake",), **inputs)

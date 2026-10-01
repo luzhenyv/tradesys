@@ -1,22 +1,22 @@
-# Trading Rules Spec
+# Playbook · 技术面（technical）
 
-> 方法论 Source of Truth。代码只是本文件的 executable implementation。
-> 架构约束见 `docs/specs/Architecture-Freeze-v1.md`（下称 AF）。
-> 版本：v0.3（全部规则 `confirmed`；按 AF §2.8 标注 Impl 等级）
+> 方法论 Source of Truth：自然语言规则 + 可执行的 rule 块。代码只提供工具，执行器按本文件调用工具（`docs/DESIGN.md`）。
+> 运行：`tradesys run playbooks/technical.md < snapshot.json`
+> 版本：v0.4（全部规则 `confirmed`；已加 rule 块的规则见文末）
 
 ## 阅读约定
 
 - **ID**：`P-*` 原语，`V01–V18` 不买原则（EP301 顺序），`S01–S09` 买点（EP302 顺序），`A-*` 提醒。
-- **Source**：`EP301§R05` = 第 301 期第 5 条，`EP302§B3` = 第 302 期买点 3。Source ID 见 AF §12.2，对应文件为 `docs/sources/{voice,summaries}/2026-09-23-<id小写>-*.md`。
-- **Status**：全部已 `confirmed`（已人工核对 voice 原文，AF §13）。以后修改任何规则，需先改回 `draft`，重新核对后再确认。
+- **Source**：`EP301§R05` = 第 301 期第 5 条，`EP302§B3` = 第 302 期买点 3。Source ID 见 `docs/DESIGN.md` §8，对应文件为 `docs/sources/{voice,summaries}/2026-09-23-<id小写>-*.md`。
+- **Status**：全部已 `confirmed`（已人工核对 voice 原文）。以后修改任何规则，需先改回 `draft`，重新核对后再确认。
 - **Voice 核对**：`✔` 表示已在 voice 原文中找到依据；`待核对` 表示目前只依据 summary。
-- **Impl**（AF §2.8，MVP 够用即可）：
+- **Impl**（DESIGN §9，MVP 够用即可）：
   - `full`：完整实现
   - `simple`：近似算法，结果 `review=True`，报告标"⚠ 近似算法，需人工复核"
   - `stub`：占位，返回 MANUAL
   - `YAML`：结构由人在 `data/structures/<TICKER>.yaml` 中标注，无结构时返回 MANUAL
-- **参数**：以 `config.key` 形式引用，默认值与来源见 §6。
-- **结果状态**：`PASS / VETO / WARN / MANUAL / UNAVAILABLE`（AF §6）。
+- **rule 块**：规则的可执行部分（语法见 DESIGN §4）。阈值就写在 rule 块里，注释标注参数名与状态（`已裁决` 用户决定 / `source` 原文给出 / `默认值` 待实盘校准）。正文中的 `veto.max_stop_pct` 等是参数的说明性名字。没有 rule 块的规则尚未实现，执行器跳过。
+- **结果状态**：`PASS / VETO / WARN / MANUAL / UNAVAILABLE`（DESIGN §3）。
 - **时点**：所有规则在 `session_date`（最近一个已收盘交易日）上求值，记为 **T**；T-1 为前一交易日。
 
 ---
@@ -89,7 +89,7 @@
 
 - **Impl**：YAML（不自动识别）
 - **Definition**：`Zone(low, high, kind)`，支撑阻力是**区间**而非单点。
-- **来源**：只来自 `data/structures/<TICKER>.yaml`（AF §10）。人在画区间时参考成交密集区、横盘平台（EP249：连续 2–5 日窄幅横盘）、前高前低；V1 不自动识别。
+- **来源**：只来自 `data/structures/<TICKER>.yaml`（DESIGN §6）。人在画区间时参考成交密集区、横盘平台（EP249：连续 2–5 日窄幅横盘）、前高前低；V1 不自动识别。
 - **Rule**：单一均线 / 单一趋势线 / 单一前低点的有效性打折（EP272），报告中注明。
 - **Status**：confirmed
 
@@ -163,7 +163,7 @@
   4. `X = call_ask(K) + put_ask(K)`，**必须用 Ask**
   5. `K > C` → `X' = X − (K − C)`；`K < C` → `X' = X + (C − K)`
   6. `Band68 = [C − X', C + X']`
-- **as_of**：无法获得 T 日期权链 → `UNAVAILABLE`，不得用当日期权链替代（AF §4）。
+- **as_of**：无法获得 T 日期权链 → `UNAVAILABLE`，不得用当日期权链替代（DESIGN §6）。
 - **Test Case**：
   - TSLA：C=164.9，K=165，call 6.30 + put 6.00 → X=12.30，X'=12.20 → **[152.7, 177.1]**
   - NVDA：C=880，K=880，call 29.0 + put 27.1 → **[823.9, 936.1]**
@@ -186,6 +186,11 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Automation**：auto
 - **Source**：EP301§R01 · Voice 核对 ✔
 - **Test Case**：20 日收盘最低 100，T 收盘 99.5 → VETO；T 收盘 100.2 → PASS
+```rule
+kind: veto
+when:
+  - new_low: {n: 20}          # recent.lookback_days · 默认值，待实盘校准
+```
 - **Status**：confirmed
 
 ### V02 刚跌破强支撑下沿
@@ -237,6 +242,12 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Test Case**（EP301）：
   - 支撑 100–120，entry 119，stop 100 → 16% → VETO
   - entry 109，stop 100 → 8.3% → PASS
+```rule
+kind: veto
+scope: candidate
+when:
+  - stop_wider_than: {pct: 0.10}   # veto.max_stop_pct · 已裁决
+```
 - **Status**：confirmed
 
 ### V06 所属板块前一日跌幅前 10%
@@ -247,6 +258,10 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：MANUAL（V1 不做板块扫描）。报告提示用户自查。
 - **Automation**：manual
 - **Source**：EP301§R06 · Voice 核对 ✔
+```rule
+kind: manual
+ask: T-1 日该股跌幅是否位列所属板块成分股前 10%？（V1 不做板块扫描，请自查）
+```
 - **Status**：confirmed
 
 ### V07 持续下跌且财报前异常放量加速
@@ -271,6 +286,10 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：V1 为 MANUAL（Journal 未实现）；Journal 引入后改为 auto
 - **Automation**：manual
 - **Source**：EP301§R08 · Voice 核对 ✔。`cooldown_days` 为默认值（原文"数日"）。
+```rule
+kind: manual
+ask: 最近 5 个交易日内是否在该股上被打过止损？（Journal 未实现，请自查）
+```
 - **Status**：confirmed
 
 ### V09 不熟悉基本面、仅因跌幅大而"看似便宜"
@@ -280,6 +299,10 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：MANUAL（报告固定提问："你是否长期跟踪过该公司基本面？"）
 - **Automation**：manual
 - **Source**：EP301§R09 · Voice 核对 ✔
+```rule
+kind: manual
+ask: 你是否长期跟踪过该公司基本面？若只是因为跌幅大而觉得便宜，不买。
+```
 - **Status**：confirmed
 
 ### V10 小市值 / OTC / 社群热度
@@ -305,6 +328,12 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Output**：VETO
 - **Automation**：auto
 - **Source**：EP301§R11 · Voice 核对 ✔
+```rule
+kind: veto
+when:
+  - new_high: {n: 20}         # recent.lookback_days · 默认值，待实盘校准
+  - volume_state: {state: shrink}
+```
 - **Status**：confirmed
 
 ### V12 突破后悬空、远离支撑
@@ -345,6 +374,19 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Automation**：auto
 - **Source**：EP301§R14、EP302 · Voice 核对 ✔（"你20块钱的止损上方至少要涨20块钱的预期，你才能够实现1:1"）
 - **Test Case**（EP301）：entry 125，stop 100，target 142 → rr 0.68 → VETO
+```rule
+kind: veto
+scope: candidate
+when:
+  - rr_below: {x: 1.0}        # veto.min_rr · 已裁决
+```
+
+```rule
+kind: warn
+scope: candidate
+when:
+  - rr_below: {x: 1.5}        # veto.preferred_rr · 已裁决
+```
 - **Status**：confirmed
 
 ### V15 RSI-6 > 90
@@ -369,7 +411,7 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 
 ## 3.3 特殊场景（V17–V18）
 
-盘后分析模式下无法判断，作为次日执行提醒出现在报告 Advice 区（AF §15.2），见 A-V17 / A-V18。
+盘后分析模式下无法判断，作为次日执行提醒出现在报告 Advice 区，见 A-V17 / A-V18。
 
 ---
 
@@ -481,6 +523,10 @@ Kind：`context` = `evaluate(ctx)`；`candidate` = `evaluate(ctx, candidate)`；
 - **Impl**：stub（MANUAL）
 - **Output**：不产生 Candidate，报告中为 MANUAL 提示（V1 不做板块数据）
 - **Source**：EP302§B8 · Voice 核对 ✔
+```rule
+kind: manual
+ask: 今日所属板块指数是否突破？该股是否为放量实体大阳突破最近阻力的龙头？（V1 不做板块数据，请自查）
+```
 - **Status**：confirmed
 
 ### S09 上行回撤不破 61.8% + RSI 超卖 + 底背离 + 止跌形态
@@ -519,51 +565,7 @@ Advice 只提醒，不影响结论。
 
 ---
 
-# 6. Parameters
-
-对应 `config/config.yaml`，分组与顺序完全一致（由测试保证 yaml 与代码默认值相同）。
-
-- **含义**：一句话说明，详情见"用于"列的规则条目。
-- **状态**：`已裁决`（用户决定）/ `source`（原文给出）/ `默认值`（原文未给出，待实盘校准）。
-- **Source**：原始出处，Source ID 见 AF §12.2。
-
-| Key | 默认 | 含义 | 状态 | 用于 | Source |
-| --- | --- | --- | --- | --- | --- |
-| `veto.min_rr` | 1.0 | 盈亏比低于此值 → VETO | 已裁决 | V14 | EP301§R14 |
-| `veto.preferred_rr` | 1.5 | 盈亏比低于此值 → WARN | 已裁决 | V14 | EP302 |
-| `veto.max_stop_pct` | 0.10 | 单笔止损幅度上限 | 已裁决 | V05 | EP301§R05 |
-| `veto.disabled` | [] | 实验时关闭的规则 ID | — | 全部 V | AF §17 |
-| `universe.min_market_cap` | 5.0e9 | 市值低于此值 → WARN（美元） | 已裁决 | V10 | EP301§R10, EP302 |
-| `recent.lookback_days` | 20 | "近期"新低 / 新高的回看天数 | 默认值 | P-NEWLOW / P-NEWHIGH | EP301§R01 |
-| `recent.break_days` | 2 | "刚"破位的天数窗口 | source | V02, V03 | EP301§R02 |
-| `volume.shrink_ratio` | 1.0 | 两个量比都低于此值 = 缩量 | 已裁决 | P-VOL | EP010, EP301§R04 |
-| `volume.expand_ratio` | 1.0 | 两个量比都高于此值 = 放量 | 已裁决 | P-VOL | EP010 |
-| `rsi.periods` | [6, 24] | RSI 快线 / 慢线周期 | source | P-RSI | EP301§R15 |
-| `stop.buffer_pct` | 0.01 | 止损位额外预留，防扫损 | source | 所有 Setup | EP150（预留 1–2%） |
-| `band68.max_strike_gap_pct` | 0.02 | 最近行权价偏离收盘价上限 | source | P-BAND68 | EP189 |
-| `band68.expiry` | monthly | 使用的期权到期日 | 默认值 | P-BAND68 | EP189 |
-| `swing.k` | 2 | 摆动点左右各比较几根 K 线 | 默认值 | P-SWING | — |
-| `divergence.max_gap_days` | 30 | 背离两个摆动点的最大间隔 | 默认值 | P-DIVERGENCE | — |
-| `candle.short_shadow_ratio` | 0.1 | "极短影线"占全日振幅上限 | 默认值 | P-CANDLE | — |
-| `v07.earnings_window_days` | 2 | 距财报几个交易日内 | source | V07 | EP301§R07 |
-| `v07.min_drop_pct` | 0.03 | "异常下跌"的单日跌幅 | 默认值 | V07 | — |
-| `v08.cooldown_days` | 5 | 止损后回避天数 | 默认值 | V08 | EP301§R08（"数日"） |
-| `v12.max_distance_pct` | 0.10 | 入场价距下方支撑上限 | 默认值 | V12 | EP301§R12 |
-| `v13.min_room_pct` | 0.02 | 距上方下一阻力的最小空间 | 默认值 | V13 | — |
-| `v15.rsi_fast_max` | 90 | RSI-6 高于此值 → VETO | source | V15 | EP301§R15 |
-| `v16.rsi_overbought` | 80 | RSI-6 超买线 | source | V16 | EP301§R16 |
-| `s01.lookback_days` | 20 | 回看多少天内的突破 | 默认值 | S01 | — |
-| `s02.lookback_days` | 20 | 回看多少天内的趋势线突破 | 默认值 | S02 | — |
-| `s02.near_line_pct` | 0.03 | 收盘距趋势线多近算回踩 | 默认值 | S02 | — |
-| `s04.lookback_days` | 20 | 回看多少天内的颈线突破 | 默认值 | S04 | — |
-| `s04.touch_pct` | 0.02 | 最低价距颈线多近算触及 | 默认值 | S04 | — |
-| `s05.min_streak` | 5 | 最少连续收涨天数 | 默认值 | S05 | — |
-| `s06.dry_ratio` | 0.6 | "极度缩量"的量比上限 | 默认值 | S06 | — |
-| `s09.rsi_oversold` | 20 | RSI-6 超卖线 | 已裁决 | S09 | EP302§B9 |
-
----
-
-# 7. Provenance Index
+# 6. Provenance Index
 
 | Source | 规则 |
 | --- | --- |
@@ -580,4 +582,5 @@ Advice 只提醒，不影响结论。
 
 ## 后续工作
 
-- 实盘校准 §6 中状态为"默认值"的参数，校准后改为"已裁决"。
+- 实盘校准 rule 块中注释为"默认值"的参数，校准后改为"已裁决"。
+- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加 rule 块：V01、V05、V06、V08、V09、V11、V14、S08。

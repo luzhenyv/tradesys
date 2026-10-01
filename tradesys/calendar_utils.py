@@ -1,9 +1,9 @@
-"""纯日期计算（AF §4、§8）。"""
+"""纯日期计算与 Snapshot 组装（DESIGN §6）。"""
 
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from tradesys.models import Bars
+from tradesys.models import Bars, Snapshot
 
 ET = ZoneInfo("America/New_York")
 MARKET_CLOSE = time(16, 0)
@@ -25,3 +25,9 @@ def session_date(bars: Bars, as_of: datetime) -> date:
 def is_opex_friday(d: date) -> bool:
     """月度期权交割日：每月第三个周五。"""
     return d.weekday() == 4 and 15 <= d.day <= 21
+
+
+def make_snapshot(bars: Bars, as_of: datetime, **inputs) -> Snapshot:
+    """把 as_of 解析为 session_date，截取 bars，组装 Snapshot。inputs 为其余字段。"""
+    sd = session_date(bars, as_of)
+    return Snapshot(bars.ticker, as_of, sd, bars.upto(sd), **inputs)

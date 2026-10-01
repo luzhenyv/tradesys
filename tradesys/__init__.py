@@ -1,1 +1,1 @@
-"""tradesys：把个人交易方法论转成可测试规则。规则见 docs/rules_spec.md。"""
+"""tradesys：规则是数据（playbooks/），代码是工具（tools/）。见 docs/DESIGN.md。"""

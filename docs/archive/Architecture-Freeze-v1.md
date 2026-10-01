@@ -1,7 +1,9 @@
 # 交易方法论代码化 · Architecture Freeze v1.1
 
+> **已归档（2026-10-01）**：被 `docs/DESIGN.md` 取代。仅作历史参考，不再维护。
+
 > 状态：Architecture Frozen
-> 下一阶段：Phase 0 — Rule Specification & Project Skeleton
+> 阶段计划：`docs/plans/`（Phase 0 已完成，Phase 1 待开始）
 > 核心原则：**最小化、结构清晰、易于扩展，但不为未来不存在的问题提前设计。**
 
 ### v1.1 变更摘要
@@ -15,10 +17,13 @@
 5. Protocol 全部带 `as_of`；新增 `FundamentalSource`；`is_opex_friday` 移出 Protocol（§4）。
 6. Feature 输出改为类型化结果，允许序列（§5）。
 7. 规则 ID 改为 `V01–V18` / `S01–S09` / `P-*` / `A-*`；Source 使用稳定 ID（§12、§15）。
-8. 新增阈值裁决表，记录原始材料之间的冲突；已裁决：盈亏比 1.0 否决 / 1.5 警告、单笔止损 10%、市值 50 亿美元仅警告（§16）。
+8. 原始材料之间的阈值冲突全部裁决，结果记录在 rules_spec §6（§16）。
 9. 分时图内容（EP095 / EP111 / EP161）只作为备忘提醒，不转化为代码（§0、§19）。
 10. 新增第 8 条纪律"MVP 够用即可"：结构由人在 YAML 中画、机器只判定；实现分 full / simple / stub 三级；数据源只接 yfinance；代码规模软预算（§2、§10、§24）。
-11. Phase 0 落地后同步：包目录为仓库根下的 `tradesys/`（不使用 `src/` 布局）；`AnalysisContext` 用 `zones` / `lines` 取代 `structures`；`Candidate.rr` 改为由 entry / stop / target 计算的属性；新增 §26 Phase 1 计划（§7、§18、§24、§25、§26）。
+11. Phase 0 落地后同步：包目录为仓库根下的 `tradesys/`；`AnalysisContext` 用 `zones` / `lines` 取代 `structures`；`Candidate.rr` 改为计算属性（§7、§18、§24）。
+12. 新增第 9 条纪律"Unix 哲学：小工具 + 调度"；取消 `FeatureSet` 与 `Feature` / `Valuation` Protocol，特征改为按需调用的纯函数；规则表与阈值表只保留在 rules_spec；阶段计划移至 `docs/plans/`（§2、§5、§15、§16）。
+
+此后的变化以 git 历史为准，本摘要不再追加。
 
 ---
 
@@ -67,7 +72,7 @@ Markdown Report
 
 ---
 
-# 2. 七条工程纪律
+# 2. 九条工程纪律
 
 ### 1. 最小化
 
@@ -120,6 +125,17 @@ Markdown Report
 - **一个真实数据源**。V1 只接 yfinance（外加测试用的 fake），IBKR 推迟到 V1.x。
 - **规模软预算**。`tradesys/` 包约 ≤ 1500 行；每个 V / S 规则文件约 ≤ 50 行。超出时先简化或降级为 `stub`，再考虑加代码。
 
+### 9. Unix 哲学：小工具 + 调度
+
+系统是一组专门、短小的工具，而不是一个全能函数。
+
+- **一个工具只做一件事**。工具是纯函数：输入数据、输出数据，不读全局状态、不做 I/O。I/O 只出现在 `adapters/` 与 CLI。
+- **数据是通用接口**。工具之间只传 frozen dataclass，都能经 `serialize.py` 转为 JSON。任何一步的输出都可以落盘、查看，或交给下一步。
+- **调度与计算分离**。`engine.py` 只负责按顺序调用工具，不写规则逻辑；规则逻辑只在各自的工具文件里。
+- **为 agent 编排预留，但不提前建设**。现阶段由 engine 调度；CLI 子命令可单独调用并用 JSON 串联。将来由 skill / agent 直接编排这些子命令，现在不写任何 agent 代码。
+- **文档先行**。新工具先在 rules_spec / AF 有条目，再写代码；工具文件 docstring 首行引用条目 ID。
+- **拆分有上限**。只在确实需要单独调用或单独测试时才拆成新工具，不为拆而拆；仍受 §2.8 约束。
+
 ---
 
 # 3. Architecture Boundary
@@ -162,19 +178,23 @@ features["rsi_6"]
 ## 3.2 执行顺序（engine）
 
 ```text
-1. resolve as_of → session_date
-2. adapters 拉取数据（bars / chain / calendar / fundamental）
-3. features  ← bars
-4. zones / lines ← data/structures/<TICKER>.yaml
-5. ctx = AnalysisContext(...)
-6. context vetoes      evaluate(ctx)
-7. setups              evaluate(ctx) → list[Candidate]
-8. candidate vetoes    evaluate(ctx, candidate)
-9. reminders           evaluate(ctx)
-10. report             render(ctx, results, candidates)
+I/O（adapters / 文件）
+1. fetch_bars / chain / calendar / fundamental   ← adapters
+2. load_structures                               ← data/structures/<TICKER>.yaml
+
+纯函数（工具）
+3. ctx = make_context(bars, as_of, ...)          as_of → session_date，截取 bars
+4. context vetoes      vNN.evaluate(ctx)         特征由规则按需调用 features/ 纯函数
+5. setups              sNN.evaluate(ctx) → list[Candidate]
+6. candidate vetoes    vNN.evaluate(ctx, candidate)
+7. reminders           advice(ctx)
+8. result = AnalysisResult(ctx, results, candidates, advice)
+9. render_markdown(result)
 ```
 
-即使第 6 步已经产生 veto，第 7–8 步仍然执行，报告中完整展示（便于复盘："如果没有 V01，会产生什么 Candidate"）。最终结论由 Veto 结果决定。
+即使第 4 步已经产生 veto，第 5–6 步仍然执行，报告中完整展示（便于复盘："如果没有 V01，会产生什么 Candidate"）。最终结论由 Veto 结果决定。
+
+engine 只做这里列出的调度（§2.9），不包含任何规则判断。I/O 只在第 1–2 步；第 3–9 步都是纯函数，每一步的输出都可以序列化为 JSON。
 
 ---
 
@@ -201,16 +221,9 @@ class FundamentalSource(Protocol):
     def snapshot(self, ticker: str, as_of: datetime) -> Fundamental | None:
         """市值、交易所、所属板块。"""
 
-
-class ValuationSource(Protocol):
-    def anchor(self, ticker: str, as_of: datetime) -> ValuationAnchor | None: ...
-
-
-class Feature(Protocol):
-    name: str
-
-    def transform(self, bars: Bars) -> FeatureOutput: ...
 ```
+
+Protocol 只用于数据源边界。规则与特征是普通函数，用类型别名描述签名即可（§17）。
 
 说明：
 
@@ -227,9 +240,9 @@ Zone、Line、Fib 属于基础结构，直接使用普通 Python function / data
 
 > **系统内部不使用 pandas DataFrame 作为跨层数据结构。**
 
-## 5.1 类型化输出
+## 5.1 特征是按需调用的纯函数
 
-每个 Feature 返回自己的 frozen dataclass，由 `FeatureSet` 以**属性**（而非字符串键）聚合：
+每个特征是 `features/` 中的一个纯函数，输入 `Bars`（或其序列）与配置，返回自己的 frozen dataclass 或简单值。不设中央的 `FeatureSet`，也不预先计算后塞进 ctx：规则需要哪个特征就调用哪个，报告展示特征时也调用同一组函数。日线只有约 250 根，重复计算的成本可以忽略。
 
 ```python
 @dataclass(frozen=True)
@@ -240,23 +253,18 @@ class RsiResult:
 
 @dataclass(frozen=True)
 class VolumeResult:
-    vs_prev: tuple[float, ...]   # 当日量 / 前一日量
-    vs_ma5: tuple[float, ...]    # 当日量 / 前 5 日均量（不含当日）
-    ma5: tuple[float, ...]
-    state: tuple[VolumeState, ...]  # shrink / expand / neutral，规则见 §16
+    vs_prev: tuple[float | None, ...]   # 当日量 / 前一日量
+    vs_ma5: tuple[float | None, ...]    # 当日量 / 前 5 日均量（不含当日）
+    state: tuple[VolumeState, ...]      # shrink / expand / neutral，规则见 rules_spec P-VOL
 
 
-@dataclass(frozen=True)
-class FeatureSet:
-    rsi: RsiResult
-    volume: VolumeResult
-    candles: CandleResult
-    streak: StreakResult
+def volume(bars: Bars, cfg: VolumeConfig) -> VolumeResult: ...
+def rsi(closes: tuple[float, ...], period: int) -> tuple[float, ...]: ...
 ```
 
 - 允许序列：背离、连阳、缩量判断都需要历史，而不是单个标量。
 - 换算法只要保持输出类型不变，业务层不受影响。
-- Feature 之间的依赖（例如背离依赖 RSI）不在 `features/` 内解决，背离属于 `structure/`，输入为 `Bars + FeatureSet`。
+- 特征之间的依赖（例如背离依赖 RSI）由调用方组合：`structure/divergence.py` 自己调用 `rsi()`。
 
 ## 5.2 dataclass vs Pydantic
 
@@ -276,8 +284,7 @@ class FeatureSet:
 | `Bar` / `Bars` | 单日 OHLCV / 按日期升序的不可变序列 | adapters |
 | `OptionQuote` / `Chain` | 单个合约（strike、type、bid、**ask** 必填）/ 某到期日的期权链 | adapters |
 | `Fundamental` | 市值、交易所、板块 | adapters |
-| `ValuationAnchor` | 估值区间（低估 / 合理 / 高估边界） | adapters（YAML） |
-| `FeatureSet` | §5.1 | features |
+| `VolumeResult` 等 | 各特征函数的输出（§5.1） | features |
 | `Zone` | 价格区间 `[low, high]`，带 kind（support / resistance），来自 YAML | structure |
 | `Line` | 趋势线 / 颈线（两点定义，可在任意日期求值） | structure |
 | `FibLevels` | 某段涨幅的回撤位（38.2 / 50 / 61.8） | structure |
@@ -317,8 +324,7 @@ class AnalysisContext:
     ticker: str
     as_of: datetime
     session_date: date                 # 最近一个已完成交易日
-    bars: Bars                         # 截止 session_date
-    features: FeatureSet
+    bars: Bars                         # 截止 session_date；特征按需从 bars 计算
     config: Config
     data_sources: Mapping[str, str]
     zones: tuple[Zone, ...] = ()       # 来自 YAML（§10）
@@ -353,7 +359,7 @@ Feature / Structure / Veto / Setup 可以读取 ctx，但不能通过 ctx 拉数
 - 盘中 `as_of`（例如 10:30）解析为**前一交易日**，永远不使用未完成的日线。
 - 盘前盘后价格不参与任何计算。
 
-所有数据（Bars、Chain、Fundamental、Calendar、Valuation、Journal、Confirmed Structures）都必须能追溯到对应的时间语义。未来做回测时直接复用。
+所有数据（Bars、Chain、Fundamental、Calendar、Journal、Confirmed Structures）都必须能追溯到对应的时间语义。未来做回测时直接复用。
 
 ---
 
@@ -367,7 +373,6 @@ data_sources = {
     "options": "yahoo",
     "calendar": "yahoo",
     "fundamental": "yahoo",
-    "valuation": "yaml",
     "structures": "data/structures/META.yaml",
 }
 ```
@@ -526,7 +531,7 @@ deprecated   废弃（保留记录）
 ## 3. Veto Rules (V01–V18)
 ## 4. Setup Rules (S01–S09)
 ## 5. Advice Rules (A-*)
-## 6. Parameters（§16 阈值表的裁决结果）
+## 6. Parameters（全部可配置阈值，与 config.yaml 一一对应）
 ## 7. Provenance Index
 ```
 
@@ -548,70 +553,17 @@ Test Case       输入 → 期望输出（优先取自原始材料中的案例�
 Implementation  tradesys/vetoes/v05.py
 ```
 
-## 15.1 ID 映射
+## 15.1 ID 映射与规则清单
 
-- `V01–V18`：与 EP301 的 18 条顺序一一对应。
-- `S01–S09`：与 EP302 的 9 个买点顺序一一对应。
-
-## 15.2 Veto 分类总表
-
-| ID | 名称 | Kind | 所需数据 | V1 自动化 |
-| --- | --- | --- | --- | --- |
-| V01 | 收盘价创近期新低 | context | bars | auto |
-| V02 | 刚破强支撑下沿且逼近阻力 | context | structures | auto |
-| V03 | 刚破趋势线 / 61.8% / 颈线 | context | structures | auto |
-| V04 | 缩量反弹 | context | bars, volume | auto |
-| V05 | 止损无法确定或过宽（> `max_stop_pct`） | candidate | candidate | auto |
-| V06 | 板块内前一日跌幅前 10% | context | 板块成分股行情 | **manual**（V1 不做板块扫描） |
-| V07 | 阴跌且财报前异常放量加速 | context | bars, calendar | auto |
-| V08 | 刚被打止损 | context | journal | manual（Journal 引入前） |
-| V09 | 不熟悉基本面、仅因跌幅大 | context | 人的判断 | **manual** |
-| V10 | 大跌后社群热议的小盘 / OTC | context | fundamental | partial：OTC → VETO（已确认）；市值 < `min_market_cap` → **WARN**（不否决）；社群热度 manual |
-| V11 | 缩量创新高 | context | bars, volume | auto |
-| V12 | 突破后悬空远离支撑 | candidate | candidate, structures | auto |
-| V13 | 突破即撞下一强阻力下沿 | candidate | candidate, structures | auto |
-| V14 | 盈亏比不足 | candidate | candidate | auto：rr < `min_rr` → VETO；`min_rr` ≤ rr < `preferred_rr` → WARN |
-| V15 | RSI-6 > 90 | context | features | auto |
-| V16 | RSI > 80 且顶背离 | context | features, structure | auto |
-| V17 | 盘前盘后非财报消息大涨大跌 | reminder | 盘前盘后数据、新闻 | manual |
-| V18 | 开盘前半小时不下单 | reminder | — | 固定提醒 |
-
-V17、V18 在盘后分析模式下无法判断，作为**次日执行提醒**出现在报告的 Advice 区，ID 保持不变。
-
-## 15.3 Setup 总表
-
-| ID | 买点 | 关键结构 / 条件 | 备注 |
-| --- | --- | --- | --- |
-| S01 | 放量突破强阻力 → 缩量回踩 | Zone, BreakVerdict, 相对量能, PatternHit | |
-| S02 | 下行趋势线放量突破 → 缩量回踩不破 | Line, 收盘价 | |
-| S03 | 上升旗形放量突破 | YAML 中的 A/B 线, Fib 61.8% | EP150 |
-| S04 | W 底 / 头肩底颈线突破回踩 | Line（颈线）, 收盘价 | 分时抵抗仅作为 A-INTRADAY 备忘，不参与判定 |
-| S05 | 强势连阳首次阴跌触 MA5 / MA10 | streak, MA | |
-| S06 | 极度缩量后放量看涨吞没 | candles, 相对量能 | |
-| S07 | 缩量新低后放量锤子线 | candles, EP124 排序 | |
-| S08 | 板块突破日龙头放量大阳 | 板块指数行情 | V1 manual（同 V06） |
-| S09 | 回撤不破 61.8% + RSI 超卖 + 底背离 + 止跌形态 | Fib, RSI, 背离, PatternHit | |
+- `V01–V18`：与 EP301 的 18 条顺序一一对应；`S01–S09`：与 EP302 的 9 个买点一一对应。
+- 每条规则的 Kind、所需数据、Impl 等级只记录在 rules_spec 条目中，本文件不重复列表。
+- V17、V18 在盘后分析模式下无法判断，作为次日执行提醒出现在报告的 Advice 区，ID 保持不变。
 
 ---
 
-# 16. 阈值裁决表
+# 16. 阈值
 
-原始材料之间存在冲突或缺失定义。每一项都是 `config.yaml` 参数，由人裁决后写入 `rules_spec.md §6`，并附来源。
-
-| 参数 | 冲突 / 缺失 | 来源 | 状态 |
-| --- | --- | --- | --- |
-| `veto.min_rr` | **1.0**：盈亏比低于 1:1 → VETO | EP301§R14, EP302 | 已裁决 |
-| `veto.preferred_rr` | **1.5**：1:1 ≤ 盈亏比 < 1:1.5 → WARN | EP301§R14, EP302 | 已裁决 |
-| `veto.max_stop_pct` | **0.10**：单笔止损幅度 `(entry - stop) / entry` 超过 10% → VETO（原材料示例为 5%–8%，按个人计划取 10%） | EP301§R05 | 已裁决 |
-| `universe.min_market_cap` | **50 亿美元**：低于阈值 → WARN，不否决，最终由用户决定（EP301 / EP302 的 100 亿、200 亿仅作参考） | EP301§R10, EP302 | 已裁决 |
-| `recent.lookback_days` | **默认 20**（约一个月）：当日收盘价 < 前 20 个交易日的最低收盘价 → VETO。只比收盘价，不比历史最低价（EP301 voice："和近期的收盘价对比，不是要和历史上最低价去对比"）。报告同时给出"收盘价为 N 日新低"的实际 N，供人工对照 K 线 | EP301§R01 | 默认值，待实盘校准 |
-| `volume.baseline` | **同时比较前一日与 MA5**（MA5 取前 5 日，不含当日）。`vs_prev` 与 `vs_ma5` 都 < `shrink_ratio`（默认 1.0）→ 缩量；都 > `expand_ratio`（默认 1.0）→ 放量；两者方向不一致 → 中性。报告同时展示两个比值 | EP010, EP301§R04 | 已裁决 |
-| `s09.rsi_oversold` | **默认 20**（RSI-6 < 20 为超卖，按惯例）。注意：EP302 voice 原文说"超卖是 RSI 大于 80"，疑为口误（>80 是超买，见 V16），summary 未反映该问题 | EP302§B9 | 默认值，voice 口误待确认 |
-| `v15.rsi_fast_max` | 90 | EP301§R15 | 明确 |
-| `v16.rsi_overbought` | 80 | EP301§R16 | 明确 |
-| `rsi.periods` | 6 / 24（去掉 12） | EP301§R15, EP302§B9 | 明确 |
-| `band68.max_strike_gap_pct` | 2% | EP189 | 明确 |
-| 参考胜率 | EP302 说 60–70%；EP124 说 70–80% | — | 仅文档，不入 config |
+原始材料之间的阈值冲突已全部裁决。参数、默认值、含义与来源只记录在 rules_spec §6，并与 `config/config.yaml` 一一对应；本文件不重复。
 
 ---
 
@@ -620,17 +572,12 @@ V17、V18 在盘后分析模式下无法判断，作为**次日执行提醒**出
 Veto 是风险控制，不是可替换的"投资风格"。单条件一票否决（EP301）。
 
 ```python
-class ContextVeto(Protocol):
-    id: str
-    def evaluate(self, ctx: AnalysisContext) -> RuleResult: ...
-
-
-class CandidateVeto(Protocol):
-    id: str
-    def evaluate(self, ctx: AnalysisContext, candidate: Candidate) -> RuleResult: ...
+# engine.py：每条规则是 vetoes/vNN.py 中的 evaluate 函数，用字典注册
+ContextVeto = Callable[[AnalysisContext], RuleResult]
+CandidateVeto = Callable[[AnalysisContext, Candidate], RuleResult]
 ```
 
-- 18 条规则**全部列出**，自动化程度见 §15.2。`manual` 与 `unavailable` 不等于 `pass`，报告中以人工检查清单呈现。
+- 18 条规则**全部列出**，自动化程度见 rules_spec 各条目的 `Impl` 字段。`manual` 与 `unavailable` 不等于 `pass`，报告中以人工检查清单呈现。
 - `WARN` 不阻断：报告中高亮展示，决定权在用户。
 - 最终结论：任一 `VETO` → 不买；无 `VETO` 但存在 `manual` 未确认项 → "待人工确认"；其余情况下有 `WARN` 时结论附带警告列表。
 
@@ -723,9 +670,8 @@ Trading Memo
 
 | 数据 | V1 存储 | 用途 |
 | --- | --- | --- |
-| 行情缓存 | DuckDB | 日线缓存、历史数据、未来回测 |
+| 行情缓存 | **推迟**：Phase 1 ①完成后视 yfinance 速度再定（候选 DuckDB） | 日线缓存、历史数据、未来回测 |
 | Confirmed Structures | YAML（`data/structures/`） | 人工确认的结构 |
-| Valuation | YAML | 估值锚 |
 | Journal | **V1 不实现**；实现 V08 或 V2 止盈时引入 SQLite | 止损记录、持仓、复盘 |
 | Methodology | Markdown | Rules、Sources、Summaries、ADRs |
 
@@ -754,7 +700,7 @@ Python 3.12
 Pydantic      仅 config / YAML 校验
 Typer         CLI
 PyYAML        YAML 读取
-DuckDB        行情缓存
+DuckDB        行情缓存（推迟，见 §21）
 Pytest
 Ruff
 
@@ -780,14 +726,15 @@ tradesys/
 ├── config/
 │   └── config.yaml
 ├── data/
-│   ├── structures/            人工确认结构 YAML
-│   └── valuation/
+│   └── structures/            人工确认结构 YAML
 ├── pyproject.toml             uv 项目，Python 3.12
 ├── tradesys/                  Python 包（不使用 src/ 布局）
 │   ├── models.py
 │   ├── protocols.py
 │   ├── config.py
-│   ├── engine.py
+│   ├── engine.py              只调度（§2.9）
+│   ├── serialize.py           dataclass ⇄ JSON，工具间通用接口
+│   ├── cli.py                 Phase 1 ⑥
 │   ├── calendar_utils.py      is_opex_friday, session_date
 │   ├── band68.py
 │   ├── adapters/
@@ -816,9 +763,11 @@ tradesys/
 │   ├── conftest.py
 │   ├── unit/
 │   └── integration/
+├── CLAUDE.md                  开发守则入口
 ├── docs/
 │   ├── rules_spec.md
 │   ├── specs/
+│   ├── plans/                 阶段计划（phase-0.md、phase-1.md）
 │   ├── sources/
 │   │   ├── voice/
 │   │   └── summaries/
@@ -830,98 +779,7 @@ tradesys/
 
 ---
 
-# 25. Phase 0
-
-> 状态：**已完成**（2026-09-24）。29 个测试通过；`tradesys/` 包 577 行（非空 418 行）。
-
-Architecture Freeze 之后不再设计架构。Phase 0 只做四件事：
-
-### ① 项目骨架
-
-`models.py`、`protocols.py`、`engine.py`（空流程）、`config.yaml`、`adapters/fake.py`、`tests/`。
-
-### ② 规则规范
-
-整理 `docs/rules_spec.md`：P-* 原语、V01–V18、S01–S09、A-*，完成 §16 阈值裁决。
-
-### ③ Source Library
-
-- 为 `docs/sources/` 建立 §12.2 的 Source ID 索引。
-- 修正 summary frontmatter 的 `src:` 路径。
-- 规则条目引用 Source ID。
-
-### ④ 最小测试框架
-
-目标不是"代码运行起来"，而是：
-
-> **每条交易规则都有一个明确的输入 → 输出定义。**
-
-优先使用原始材料中的案例作为 golden test，例如 EP189 TSLA：
-
-```text
-Input:   close=164.9, strike=165, call_ask=6.30, put_ask=6.00
-Rule:    X = 12.30; K > C → X' = X - (K - C) = 12.20
-Output:  Band68 = [152.7, 177.1]
-```
-
----
-
-# 26. Phase 1 — 第一份可用的交易备忘录
-
-> 状态：未开始。
-> 目标：`tradesys analyze META` 输出一份完整的 Markdown 交易备忘录（§20）。
-> 约束：遵守 §2.8；`tradesys/` 包累计约 ≤ 1500 行。每一步都沿用 Phase 0 的写法：一条规则一个文件，engine 用字典注册，测试名写明原始案例。
-
-按顺序推进，每一步结束时 `pytest` 与 `ruff` 都通过。
-
-### ① yfinance adapter
-
-- `adapters/yahoo.py`，实现 `MarketDataSource`、`OptionChainSource`、`CalendarSource`、`FundamentalSource`。
-- 期权链只在 `as_of` 为当日盘后时返回，否则返回 `None`（§4）。
-- 新增依赖 yfinance。网络测试标记为 `network`，默认跳过。
-
-### ② 其余 full 规则
-
-- P-RSI；V04、V07、V10、V11、V15。
-- stub 规则：V06、V08、V09，以及 V10 的社群热度部分，返回固定文本的 MANUAL。
-- engine 接入 CANDIDATE_VETOES 的执行。
-
-### ③ YAML 结构
-
-- `structure/zones.py` 加载 `data/structures/<TICKER>.yaml`（Pydantic 校验），只保留 `confirmed_at ≤ session_date` 的条目。
-- 实现 V02、V03、V12、V13；没有结构时返回 MANUAL。
-
-### ④ simple 原语与 Setups
-
-- 原语：P-TREND、P-SWING、P-FIB、P-DIVERGENCE、P-CANDLE（3 种形态）。
-- 规则：V16；S01–S07、S09（S08 为 stub）。
-- simple 结果带 `review=True`。
-
-### ⑤ Markdown 报告
-
-- `report/markdown.py`，按 §20 的结构输出。
-- 包含 Band68 与 A-* 提醒、人工检查清单、simple / stub 规则清单。
-
-### ⑥ CLI
-
-- 新增依赖 Typer。
-- `tradesys analyze TICKER [--as-of ...]`：输出到 stdout，并可写入 `reports/`。
-
-### 不在 Phase 1
-
-- DuckDB 行情缓存：①完成后视 yfinance 的速度再决定。
-- Journal。
-- `tradesys experiment`。
-
-### 完成标准
-
-- 对任意一只主板股票运行 `tradesys analyze`，得到包含 §20 全部区块的备忘录。
-- V01–V16、S01–S09 都有测试。
-- 包规模在预算之内。
-
----
-
-# 27. 最终原则
+# 25. 最终原则
 
 > **这是一个把个人交易方法论从非结构化知识转换成可测试规则，并利用真实市场数据生成可解释交易备忘录的最小决策系统。**
 

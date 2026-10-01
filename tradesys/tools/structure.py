@@ -1,10 +1,15 @@
 """P-BREAK · EP272：收盘定盘判定突破 / 破位，盘中刺破无效。"""
 
-from tradesys.models import Bars, BreakState, BreakVerdict, Zone
+from datetime import date
+from typing import Literal
+
+from tradesys.models import Bars, Zone
+
+BreakState = Literal["intact", "false_break", "broken", "reclaimed"]
 
 
-def break_verdict(zone: Zone, bars: Bars) -> BreakVerdict:
-    """逐日回放 bars，返回最后一日的判定。
+def break_verdict(zone: Zone, bars: Bars) -> tuple[BreakState, date | None]:
+    """逐日回放 bars，返回最后一日的 (状态, 发生日)。尚未注册为工具，V02/V03 实现时再包装。
 
     支撑区间：收盘 < low → broken（转为阻力）；此后只有收盘 > high 才算 reclaimed。
     阻力区间镜像：收盘 > high → broken（突破，转为支撑）；此后收盘 < low 才算 reclaimed。
@@ -29,4 +34,4 @@ def break_verdict(zone: Zone, bars: Bars) -> BreakVerdict:
             if recovered:
                 flipped, state, on = False, "reclaimed", b.d
 
-    return BreakVerdict(target_id=zone.id, state=state, on=on)
+    return state, on

@@ -4,7 +4,7 @@ from datetime import date
 
 from tradesys.adapters.fake import trading_days
 from tradesys.models import Bar, Bars, Zone
-from tradesys.structure.zones import break_verdict
+from tradesys.tools.structure import break_verdict
 
 SUPPORT = Zone("z-100-120", "support", 100.0, 120.0)
 RESISTANCE = Zone("r-100-120", "resistance", 100.0, 120.0)
@@ -22,7 +22,7 @@ def _bars(path: list[tuple[float, float]]) -> Bars:
 
 
 def _state(zone: Zone, n: int) -> str:
-    return break_verdict(zone, _bars(EP272_PATH[:n])).state
+    return break_verdict(zone, _bars(EP272_PATH[:n]))[0]
 
 
 def test_break_ep272_intraday_poke_close_above_is_false_break():
@@ -43,5 +43,4 @@ def test_break_ep272_close_above_high_reclaims():
 
 def test_break_resistance_close_above_high_is_breakout():
     bars = _bars([(110, 115), (118, 125)])
-    v = break_verdict(RESISTANCE, bars)
-    assert (v.state, v.on) == ("broken", bars.last.d)
+    assert break_verdict(RESISTANCE, bars) == ("broken", bars.last.d)

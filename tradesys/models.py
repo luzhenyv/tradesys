@@ -1,18 +1,13 @@
-"""跨层领域模型（AF §6）。全部为 frozen dataclass。"""
+"""数据对象（DESIGN §3）。全部为 frozen dataclass，可经 serialize.py 与 JSON 互转。"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-if TYPE_CHECKING:
-    from tradesys.config import Config
-
-
-# ---------- market data ----------
+# ---------- 市场数据 ----------
 
 
 @dataclass(frozen=True)
@@ -71,7 +66,7 @@ class Fundamental:
     sector: str | None
 
 
-# ---------- structures（来自 YAML，AF §10） ----------
+# ---------- 人工标注的结构（data/structures/<TICKER>.yaml） ----------
 
 
 @dataclass(frozen=True)
@@ -95,36 +90,23 @@ class Line:
         return v1 + slope * (d.toordinal() - d1.toordinal())
 
 
-BreakState = Literal["intact", "false_break", "broken", "reclaimed"]
+# ---------- 工具的输入与输出 ----------
 
 
 @dataclass(frozen=True)
-class BreakVerdict:
-    """相对结构原始角色的判定：broken = 原极性被收盘价打破并翻转，reclaimed = 恢复原极性。"""
+class Snapshot:
+    """某只股票在 as_of 时点的全部输入。bars 已截止 session_date。"""
 
-    target_id: str
-    state: BreakState
-    on: date | None
-
-
-# ---------- features ----------
-
-VolumeState = Literal["shrink", "expand", "neutral"]
-
-
-@dataclass(frozen=True)
-class VolumeResult:
-    vs_prev: tuple[float | None, ...]
-    vs_ma5: tuple[float | None, ...]
-    state: tuple[VolumeState, ...]
-
-
-@dataclass(frozen=True)
-class FeatureSet:
-    volume: VolumeResult
-
-
-# ---------- rules ----------
+    ticker: str
+    as_of: datetime
+    session_date: date
+    bars: Bars
+    zones: tuple[Zone, ...] = ()
+    lines: tuple[Line, ...] = ()
+    fundamental: Fundamental | None = None
+    next_earnings: date | None = None
+    chain: Chain | None = None
+    sources: tuple[str, ...] = ()  # 数据来源，如 ("market=yahoo",)
 
 
 @dataclass(frozen=True)
@@ -144,6 +126,19 @@ class Candidate:
         return (self.target - self.entry) / (self.entry - self.stop)
 
 
+@dataclass(frozen=True)
+class Check:
+    """一个工具的输出。hit=None 表示工具无法判断；missing=True 表示原因是缺数据。"""
+
+    hit: bool | None
+    evidence: tuple[str, ...] = ()
+    review: bool = False  # simple 近似算法，需人工复核
+    missing: bool = False
+
+
+# ---------- 执行器的输出 ----------
+
+
 class RuleStatus(StrEnum):
     PASS = "pass"
     VETO = "veto"
@@ -155,36 +150,8 @@ class RuleStatus(StrEnum):
 @dataclass(frozen=True)
 class RuleResult:
     rule_id: str
+    title: str
     status: RuleStatus
-    reason: str
     evidence: tuple[str, ...] = ()
     candidate_id: str | None = None
-    review: bool = False  # simple 实现产生的结果，需人工复核
-
-
-@dataclass(frozen=True)
-class Band68:
-    low: float
-    high: float
-    strike: float
-    expiry: date
-
-
-# ---------- context（AF §7） ----------
-
-
-@dataclass(frozen=True)
-class AnalysisContext:
-    ticker: str
-    as_of: datetime
-    session_date: date
-    bars: Bars
-    features: FeatureSet
-    config: Config
-    data_sources: Mapping[str, str]
-    zones: tuple[Zone, ...] = ()
-    lines: tuple[Line, ...] = ()
-    fundamental: Fundamental | None = None
-    next_earnings: date | None = None
-    band68: Band68 | None = None
-    journal: object | None = None  # JournalSlice，V1 未实现
+    review: bool = False
