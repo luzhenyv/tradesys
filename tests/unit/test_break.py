@@ -3,8 +3,8 @@
 from datetime import date
 
 from tradesys.adapters.fake import trading_days
-from tradesys.models import Bar, Bars, Zone
-from tradesys.tools.structure import break_verdict
+from tradesys.models import Bar, Bars, Line, Zone
+from tradesys.tools.structure import break_verdict, current_role, line_break_verdict
 
 SUPPORT = Zone("z-100-120", "support", 100.0, 120.0)
 RESISTANCE = Zone("r-100-120", "resistance", 100.0, 120.0)
@@ -44,3 +44,22 @@ def test_break_ep272_close_above_high_reclaims():
 def test_break_resistance_close_above_high_is_breakout():
     bars = _bars([(110, 115), (118, 125)])
     assert break_verdict(RESISTANCE, bars) == ("broken", bars.last.d)
+
+
+def test_current_role_flips_while_broken_and_restores_on_reclaim():
+    assert current_role(SUPPORT, _bars(EP272_PATH[:3])) == "resistance"
+    assert current_role(SUPPORT, _bars(EP272_PATH[:5])) == "support"
+
+
+def test_line_close_below_is_broken():
+    days = trading_days(date(2026, 1, 5), 3)
+    line = Line("up", "trendline", (days[0], 100.0), (days[1], 100.0))
+    bars = Bars(
+        "TEST",
+        (
+            Bar(days[0], 110, 110, 110, 110, 1e6),
+            Bar(days[1], 110, 110, 110, 110, 1e6),
+            Bar(days[2], 90, 90, 90, 90, 1e6),
+        ),
+    )
+    assert line_break_verdict(line, bars, "below") == ("broken", days[2])

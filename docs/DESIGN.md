@@ -76,7 +76,7 @@ when:                   # 列表中全部工具 hit=True 才命中（只有 AND�
 - **盘后分析**：`as_of` 先转为美东时间（ET），解析为 `session_date` = 最近一个已收盘的常规交易日（`calendar_utils.make_snapshot`）；盘中 as_of 取前一交易日，永不使用未完成日线。
 - **收盘价是唯一真值**：破位、突破、新低、新高一律以常规时段收盘价判定（EP272）。
 - **as_of 无未来数据**：adapter 不得返回 as_of 之后才可获得的数据。yfinance 的基本面、财报日、期权链只有"现在"的值，所以只在 as_of 为今天时获取，否则为空 → `missing` → UNAVAILABLE；不得用今天的数据冒充过去。
-- **结构由人画**：支撑阻力区间、趋势线、颈线、旗形 A/B 线来自 `data/structures/<TICKER>.yaml`，机器只判定，不自动识别。
+- **结构由人画**：支撑阻力区间、趋势线、颈线、旗形 A/B 线来自 `data/structures/<TICKER>.yaml`，机器只判定，不自动识别。`tradesys fetch` 按 `confirmed_at ≤ session_date` 载入；`status: proposed` 的条目不进入 Snapshot（手写省略 status = 已确认）。`strength` / `note` / `source` 等多余键忽略，供人阅读与将来「生成 + 复核」。无结构时相关规则 MANUAL，不是 UNAVAILABLE。
 
 ## 7. 编排
 

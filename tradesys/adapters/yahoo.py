@@ -6,10 +6,12 @@ as_of 约束：日线可以回溯；基本面、财报日、期权链只有"现�
 pandas 只在本文件内出现，立即转换为 dataclass。
 """
 
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 
 import yfinance as yf
 
+from tradesys.adapters.structures import load as load_structures
 from tradesys.calendar_utils import is_opex_friday, make_snapshot, now_utc, to_et
 from tradesys.models import Bar, Bars, Chain, Fundamental, OptionQuote, Snapshot
 
@@ -74,7 +76,9 @@ def fetch_snapshot(
     session = make_snapshot(bars, as_of).session_date
 
     if local.date() != current.date():
-        return make_snapshot(bars, as_of, sources=("market=yahoo", "其余=none（as_of 不是今天）"))
+        return attach_structures(
+            make_snapshot(bars, as_of, sources=("market=yahoo", "其余=none（as_of 不是今天）"))
+        )
 
     info = t.info
     fundamental = Fundamental(info.get("marketCap"), info.get("exchange"), info.get("sector"))
@@ -88,11 +92,20 @@ def fetch_snapshot(
             ticker, exp, as_of, oc.calls, oc.puts, bars.upto(session).last.close
         )
         options = f"options=yahoo（{exp}）"
-    return make_snapshot(
-        bars,
-        as_of,
-        fundamental=fundamental,
-        next_earnings=earnings,
-        chain=chain,
-        sources=("market=yahoo", "fundamental=yahoo", options),
+    return attach_structures(
+        make_snapshot(
+            bars,
+            as_of,
+            fundamental=fundamental,
+            next_earnings=earnings,
+            chain=chain,
+            sources=("market=yahoo", "fundamental=yahoo", options),
+        )
     )
+
+
+def attach_structures(snap: Snapshot) -> Snapshot:
+    """把已确认且 as_of 可见的 YAML 结构挂到 Snapshot 上。"""
+    zones, lines = load_structures(snap.ticker, snap.session_date)
+    tag = "structures=yaml" if zones or lines else "structures=none"
+    return replace(snap, zones=zones, lines=lines, sources=(*snap.sources, tag))

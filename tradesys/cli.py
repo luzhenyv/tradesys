@@ -14,7 +14,7 @@ from tradesys.calendar_utils import parse_as_of
 from tradesys.models import Candidate, Snapshot
 from tradesys.run import run as run_playbook
 from tradesys.serialize import from_json, from_plain, to_json
-from tradesys.tools import TOOLS
+from tradesys.tools import TOOLS, call
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
@@ -75,8 +75,8 @@ def tool(
 ) -> None:
     """运行单个工具：stdin 读 Snapshot JSON，stdout 输出 Check JSON。"""
     kwargs = {k: yaml.safe_load(v) for k, v in (a.split("=", 1) for a in arg)}
-    extra = (from_json(Candidate, candidate.read_text(encoding="utf-8")),) if candidate else ()
-    typer.echo(to_json(TOOLS[name](_snapshot(), *extra, **kwargs)))
+    cand = from_json(Candidate, candidate.read_text(encoding="utf-8")) if candidate else None
+    typer.echo(to_json(call(name, _snapshot(), kwargs, cand)))
 
 
 @app.command()

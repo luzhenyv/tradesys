@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 from tradesys.models import Candidate, Check, RuleResult, RuleStatus, Snapshot
-from tradesys.tools import TOOLS
+from tradesys.tools import call
 
 HEADING = re.compile(r"^### (\S+)\s+(.*)$")
 STATUS = {"veto": RuleStatus.VETO, "warn": RuleStatus.WARN}
@@ -44,8 +44,7 @@ def check_all(when: list[dict], snap: Snapshot, candidate: Candidate | None) -> 
     checks = []
     for item in when:
         ((name, args),) = item.items()
-        extra = (candidate,) if candidate is not None else ()
-        checks.append(TOOLS[name](snap, *extra, **(args or {})))
+        checks.append(call(name, snap, args, candidate))
     evidence = tuple(e for c in checks for e in c.evidence)
     review = any(c.review for c in checks)
     if any(c.hit is False for c in checks):

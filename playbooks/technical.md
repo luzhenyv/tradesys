@@ -202,6 +202,11 @@ when:
 - **Automation**：auto（依赖 YAML 中的 Zone）
 - **Source**：EP301§R02 · Voice 核对 ✔（"刚出现这种情况的，或者是出现一两天"）
 - **Test Case**：支撑 100–120，T-1 收盘 99 → VETO
+```rule
+kind: veto
+when:
+  - zone_broken_within: {kind: support, days: 2}   # recent.break_days · 默认值
+```
 - **Status**：confirmed
 
 ### V03 刚跌破上行趋势线 / 61.8% / 顶部颈线
@@ -215,6 +220,17 @@ when:
 - **Output**：VETO
 - **Automation**：auto（趋势线 / 颈线来自 YAML）
 - **Source**：EP301§R03 · Voice 核对 ✔
+```rule
+kind: veto
+when:
+  - line_broken_within: {kind: trendline, days: 2, side: below}   # recent.break_days · 默认值
+```
+
+```rule
+kind: veto
+when:
+  - line_broken_within: {kind: neckline, days: 2, side: below}    # Fib 61.8% 留到 ④
+```
 - **Status**：confirmed
 
 ### V04 缩量反弹
@@ -385,6 +401,12 @@ when:
 - **Automation**：auto
 - **Note**：与 V05 的区别在于，V05 看候选自带的 stop，V12 看结构支撑的距离。止损设得紧、但下方没有结构支撑时，V12 仍然否决。
 - **Source**：EP301§R12 · Voice 核对 ✔（"大涨百分之十几……远离了支撑，中间悬空状态的……不能买"，SNOW +16% 案例）
+```rule
+kind: veto
+scope: candidate
+when:
+  - far_from_support: {pct: 0.10}   # v12.max_distance_pct · 已裁决
+```
 - **Status**：confirmed
 
 ### V13 突破前阻力、但开盘直接顶入下一强阻力下沿
@@ -399,6 +421,13 @@ when:
 - **Automation**：auto
 - **Source**：EP301§R13 · Voice 核对 ✔
 - **Test Case**：价格 75，阻力 80–90 与 100–110；跳空开盘 99 → VETO
+```rule
+kind: veto
+scope: candidate
+when:
+  - zone_broken_within: {kind: resistance, days: 2}
+  - tight_to_resistance: {pct: 0.02}   # v13.min_room_pct · 默认值
+```
 - **Status**：confirmed
 
 ### V14 盈亏比不足
@@ -626,4 +655,4 @@ Advice 只提醒，不影响结论。
 ## 后续工作
 
 - 实盘校准 rule 块中注释为"默认值"的参数，校准后改为"已裁决"。
-- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加 rule 块：V01、V04、V05、V06、V07、V08、V09、V10、V11、V14、V15、S08。
+- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加 rule 块：V01–V15（V03 的 Fib 留到 ④）、S08。

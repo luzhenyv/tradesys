@@ -1,0 +1,41 @@
+# 手写范例（来自 2026-08-20 图）。strength 只存档，不参与判定。
+# kind 由人指定；现价若落在区间内也由人决定 support / resistance。
+ticker: AMD
+zones:
+  - id: z-506-528
+    kind: resistance
+    low: 506
+    high: 528
+    confirmed_at: 2026-08-20
+    strength: strong
+    note: 前高密集
+  - id: z-461-476
+    kind: support
+    low: 461
+    high: 476
+    confirmed_at: 2026-08-20
+    strength: small
+    note: 现价附近，kind 按当时判断标为 support
+  - id: z-427-453
+    kind: support
+    low: 427
+    high: 453
+    confirmed_at: 2026-08-20
+    strength: medium
+  - id: z-400-420
+    kind: support
+    low: 400
+    high: 420
+    confirmed_at: 2026-08-20
+    strength: small
+  - id: z-334-366
+    kind: support
+    low: 334
+    high: 366
+    confirmed_at: 2026-08-20
+    strength: strong
+lines:
+  - id: uptrend-2026h1
+    kind: trendline
+    points: [[2026-06-03, 348], [2026-08-11, 411]]
+    confirmed_at: 2026-08-20

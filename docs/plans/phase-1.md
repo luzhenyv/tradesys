@@ -1,6 +1,6 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：①② 已完成；③ 起未开始。
+> 状态：①②③ 已完成；④ 起未开始。
 > 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
@@ -29,11 +29,13 @@
 
 主板白名单写在 V10 rule 块：NYQ/NYS/NMS/NGM/NCM/NAS/ASE/PCX。缺 fundamental / 财报日 → UNAVAILABLE。不改执行器。
 
-## ③ 结构（YAML）
+## ③ 结构（YAML） ✅（2026-10-02）
 
-- `adapters/structures.py`：读取 `data/structures/<TICKER>.yaml`，放入 Snapshot，只保留 `confirmed_at ≤ session_date` 的条目。
-- 工具：`zone_broken_within`（包装 `break_verdict`）、`line_broken_within`。
-- 规则：V02、V03；V12、V13（scope: candidate）。没有结构时工具返回 `hit=None` → MANUAL，提示"请在 YAML 中标注结构"。
+- `adapters/structures.py`：读取 `data/structures/<TICKER>.yaml`，`confirmed_at ≤ session_date`，`status: proposed` 跳过；多余键忽略。`fetch` 挂到 Snapshot。
+- 工具：`zone_broken_within`、`line_broken_within`、`far_from_support`、`tight_to_resistance`。无结构 → MANUAL。
+- 规则：V02、V03（趋势线 + 颈线；Fib 留 ④）；V12、V13（scope: candidate）。
+- 手写范例：`data/structures/AMD.yaml`。`strength` 只存档。`kind` 由人指定。
+- 执行器：`call()` 只给声明了 `candidate` 的工具传入候选，以便 V13 组合上下文工具。
 
 ## ④ Setups 与 simple 原语
 

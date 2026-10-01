@@ -3,12 +3,12 @@
 EP301 的案例全部通过真实 playbook（playbooks/technical.md）运行。
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from tradesys.adapters.fake import fake_snapshot, make_bars
 from tradesys.calendar_utils import make_snapshot
-from tradesys.models import Candidate, Fundamental, RuleStatus
+from tradesys.models import Candidate, Fundamental, Line, RuleStatus, Zone
 from tradesys.run import parse, run
 
 PLAYBOOK = Path(__file__).parents[2] / "playbooks" / "technical.md"
@@ -75,7 +75,7 @@ def test_manual_rules_need_no_code():
 
 
 def test_candidate_rules_skip_without_candidates():
-    assert {r.rule_id for r in run(PLAYBOOK, SNAP)}.isdisjoint({"V05", "V14"})
+    assert {r.rule_id for r in run(PLAYBOOK, SNAP)}.isdisjoint({"V05", "V12", "V13", "V14"})
 
 
 def test_intraday_as_of_uses_previous_session():
@@ -108,7 +108,9 @@ def test_changing_playbook_threshold_changes_result(tmp_path):
 
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
     rules = {r.id: r for r in parse(PLAYBOOK.read_text(encoding="utf-8"))}
-    assert rules["V02"].blocks == ()
+    assert rules["V16"].blocks == ()
+    assert len(rules["V02"].blocks) == 1
+    assert len(rules["V03"].blocks) == 2
     assert len(rules["V04"].blocks) == 2
     assert len(rules["V10"].blocks) == 3
     assert len(rules["V14"].blocks) == 2
@@ -202,3 +204,86 @@ def test_v15_rsi6_above_90_vetoes():
 def test_v15_rsi6_not_overbought_passes():
     snap = fake_snapshot(make_bars([130.0 - i for i in range(30)]))
     assert _status(run(PLAYBOOK, snap), "V15") == RuleStatus.PASS
+
+
+def test_v02_ep272_support_broken_yesterday_vetoes():
+    snap = fake_snapshot(
+        make_bars([125.0] * 5 + [99.0, 98.0]),
+        zones=(Zone("z-100-120", "support", 100.0, 120.0),),
+    )
+    assert _status(run(PLAYBOOK, snap), "V02") == RuleStatus.VETO
+
+
+def test_v02_no_zones_is_manual():
+    assert _status(run(PLAYBOOK, SNAP), "V02") == RuleStatus.MANUAL
+
+
+def test_v02_intact_support_passes():
+    snap = fake_snapshot(
+        make_bars([125.0] * 7),
+        zones=(Zone("z-100-120", "support", 100.0, 120.0),),
+    )
+    assert _status(run(PLAYBOOK, snap), "V02") == RuleStatus.PASS
+
+
+def test_v03_uptrend_close_below_vetoes():
+    from tradesys.adapters.fake import trading_days
+
+    days = trading_days(date(2026, 1, 5), 10)
+    line = Line("up", "trendline", (days[0], 90.0), (days[4], 94.0))
+    snap = fake_snapshot(make_bars([100.0] * 8 + [70.0, 70.0]), lines=(line,))
+    assert _status(run(PLAYBOOK, snap), "V03") == RuleStatus.VETO
+
+
+def test_v03_no_lines_is_manual():
+    assert _status(run(PLAYBOOK, SNAP), "V03") == RuleStatus.MANUAL
+
+
+def test_v12_entry_far_from_support_vetoes():
+    snap = fake_snapshot(
+        make_bars([125.0] * 7),
+        zones=(Zone("z-100-120", "support", 100.0, 120.0),),
+    )
+    assert _status(run(PLAYBOOK, snap, (_cand(140, 119),)), "V12", "c1") == RuleStatus.VETO
+
+
+def test_v12_entry_near_support_passes():
+    snap = fake_snapshot(
+        make_bars([125.0] * 7),
+        zones=(Zone("z-100-120", "support", 100.0, 120.0),),
+    )
+    assert _status(run(PLAYBOOK, snap, (_cand(125, 100),)), "V12", "c1") == RuleStatus.PASS
+
+
+def test_v12_no_zones_is_manual():
+    assert _status(run(PLAYBOOK, SNAP, (_cand(125, 100),)), "V12", "c1") == RuleStatus.MANUAL
+
+
+def test_v12_broken_support_leaves_entry_hanging():
+    snap = fake_snapshot(
+        make_bars([125.0] * 5 + [90.0]),
+        zones=(Zone("z-100-120", "support", 100.0, 120.0),),
+    )
+    assert _status(run(PLAYBOOK, snap, (_cand(90, 80),)), "V12", "c1") == RuleStatus.VETO
+
+
+def test_v13_ep301_gap_into_next_resistance_vetoes():
+    snap = fake_snapshot(
+        make_bars([75.0] * 8 + [99.0]),
+        zones=(
+            Zone("r1", "resistance", 80.0, 90.0),
+            Zone("r2", "resistance", 100.0, 110.0),
+        ),
+    )
+    assert _status(run(PLAYBOOK, snap, (_cand(99, 90),)), "V13", "c1") == RuleStatus.VETO
+
+
+def test_v13_room_to_next_resistance_passes():
+    snap = fake_snapshot(
+        make_bars([75.0] * 8 + [99.0]),
+        zones=(
+            Zone("r1", "resistance", 80.0, 90.0),
+            Zone("r2", "resistance", 120.0, 130.0),
+        ),
+    )
+    assert _status(run(PLAYBOOK, snap, (_cand(99, 90),)), "V13", "c1") == RuleStatus.PASS
