@@ -1,5 +1,6 @@
 """P-NEWLOW / P-NEWHIGH · EP301§R01：只比较收盘价，不比较历史最低价。"""
 
+from tradesys.calendar_utils import at_offset
 from tradesys.models import Check, Snapshot
 
 
@@ -15,14 +16,20 @@ def extreme(closes: tuple[float, ...], n: int, low: bool) -> tuple[bool, int]:
     return len(prior) >= n and k >= n, k
 
 
-def new_low(snap: Snapshot, n: int) -> Check:
+def new_low(snap: Snapshot, n: int, offset: int = 0) -> Check:
     """P-NEWLOW：T 日收盘价低于前 n 日所有收盘价。"""
+    snap = at_offset(snap, offset)
+    if len(snap.bars.items) < 2:
+        return Check(None, ("历史不足",), missing=True)
     hit, k = extreme(snap.bars.closes, n, low=True)
     return Check(hit, (f"close={snap.bars.last.close}", f"收盘价为 {k} 日新低", f"n={n}"))
 
 
-def new_high(snap: Snapshot, n: int) -> Check:
+def new_high(snap: Snapshot, n: int, offset: int = 0) -> Check:
     """P-NEWHIGH：T 日收盘价高于前 n 日所有收盘价。"""
+    snap = at_offset(snap, offset)
+    if len(snap.bars.items) < 2:
+        return Check(None, ("历史不足",), missing=True)
     hit, k = extreme(snap.bars.closes, n, low=False)
     return Check(hit, (f"close={snap.bars.last.close}", f"收盘价为 {k} 日新高", f"n={n}"))
 

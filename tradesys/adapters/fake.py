@@ -21,12 +21,22 @@ def make_bars(
     volumes: list[float] | None = None,
     ticker: str = "TEST",
     start: date = date(2026, 1, 5),
+    opens: list[float] | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
 ) -> Bars:
-    """open = high = low = close 的简化日线。"""
+    """默认 open = high = low = close 的简化日线。"""
     vols = volumes or [1_000_000.0] * len(closes)
+    ops = opens or closes
+    his = highs or closes
+    los = lows or closes
     days = trading_days(start, len(closes))
     return Bars(
-        ticker, tuple(Bar(d, c, c, c, c, v) for d, c, v in zip(days, closes, vols, strict=True))
+        ticker,
+        tuple(
+            Bar(d, o, h, lo, c, v)
+            for d, c, v, o, h, lo in zip(days, closes, vols, ops, his, los, strict=True)
+        ),
     )
 
 

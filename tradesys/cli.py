@@ -81,7 +81,7 @@ def tool(
 
 @app.command()
 def run(playbook: Path, candidates: Candidates = None) -> None:
-    """运行整份 playbook：stdin 读 Snapshot JSON，stdout 输出 RuleResult 列表 JSON。"""
+    """运行整份 playbook：stdin 读 Snapshot JSON，stdout 输出 RunOutput JSON。"""
     typer.echo(to_json(run_playbook(playbook, _snapshot(), _candidates(candidates))))
 
 

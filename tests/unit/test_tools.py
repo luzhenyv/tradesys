@@ -99,6 +99,11 @@ def test_rsi_all_gains_is_100_all_losses_is_0():
 def test_rsi_wilder_smoothing_matches_hand_calc():
     # period=2: closes 10,12,11,13 → seed RSI 66.67, then 85.71
     assert rsi((10.0, 12.0, 11.0, 13.0), 2) == pytest.approx(100.0 - 100.0 / 7.0)
+    from tradesys.tools.rsi import rsi_series
+
+    series = rsi_series((10.0, 12.0, 11.0, 13.0), 2)
+    assert series[-1] == rsi((10.0, 12.0, 11.0, 13.0), 2)
+    assert series[1] is None and series[2] == pytest.approx(100.0 - 100.0 / 3.0)
 
 
 def test_rsi_above_missing_history():

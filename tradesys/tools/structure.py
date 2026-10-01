@@ -108,7 +108,7 @@ def zone_broken_within(snap: Snapshot, kind: str, days: int) -> Check:
 def line_broken_within(snap: Snapshot, kind: str, days: int, side: str) -> Check:
     """给定 kind 的 Line 是否在最近 days 根内收盘穿越 side。"""
     if not snap.lines:
-        return Check(None, (ASK,))
+        return Check(False, ("YAML 中无 Line",))
     evidence: list[str] = []
     hit = False
     for line in snap.lines:

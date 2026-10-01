@@ -36,6 +36,14 @@ class Bars:
         return tuple(b.volume for b in self.items)
 
     @property
+    def highs(self) -> tuple[float, ...]:
+        return tuple(b.high for b in self.items)
+
+    @property
+    def lows(self) -> tuple[float, ...]:
+        return tuple(b.low for b in self.items)
+
+    @property
     def last(self) -> Bar:
         return self.items[-1]
 
@@ -137,6 +145,8 @@ class Check:
     evidence: tuple[str, ...] = ()
     review: bool = False  # simple 近似算法，需人工复核
     missing: bool = False
+    value: float | None = None  # setup 的 entry / stop / target
+    grade: str | None = None  # setup 形态等级，如 C=中性
 
 
 # ---------- 执行器的输出 ----------
@@ -158,3 +168,11 @@ class RuleResult:
     evidence: tuple[str, ...] = ()
     candidate_id: str | None = None
     review: bool = False
+
+
+@dataclass(frozen=True)
+class RunOutput:
+    """一次 playbook 运行：规则结果 + 由 setup 产生（及 CLI 注入）的候选买点。"""
+
+    results: tuple[RuleResult, ...]
+    candidates: tuple[Candidate, ...] = ()

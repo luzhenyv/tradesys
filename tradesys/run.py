@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from tradesys.models import Candidate, Check, RuleResult, RuleStatus, Snapshot
+from tradesys.models import Candidate, Check, RuleResult, RuleStatus, RunOutput, Snapshot
 from tradesys.tools import call
 
 HEADING = re.compile(r"^### (\S+)\s+(.*)$")
@@ -47,11 +47,50 @@ def check_all(when: list[dict], snap: Snapshot, candidate: Candidate | None) -> 
         checks.append(call(name, snap, args, candidate))
     evidence = tuple(e for c in checks for e in c.evidence)
     review = any(c.review for c in checks)
+    grade = next((c.grade for c in checks if c.grade), None)
     if any(c.hit is False for c in checks):
-        return Check(False, evidence, review)
+        return Check(False, evidence, review, grade=grade)
     if any(c.hit is None for c in checks):
-        return Check(None, evidence, review, missing=any(c.missing for c in checks))
-    return Check(True, evidence, review)
+        return Check(None, evidence, review, missing=any(c.missing for c in checks), grade=grade)
+    return Check(True, evidence, review, grade=grade)
+
+
+def _field(spec: dict | None, snap: Snapshot) -> Check:
+    if not spec:
+        return Check(True)
+    ((name, args),) = spec.items()
+    return call(name, snap, args or {})
+
+
+def evaluate_setup(rule: Rule, snap: Snapshot) -> tuple[RuleResult, Candidate | None]:
+    """首个命中的 setup 块产出至多一个 Candidate。"""
+    evidence: tuple[str, ...] = ()
+    review = False
+    for block in rule.blocks:
+        if block.get("kind") != "setup":
+            continue
+        c = check_all(block["when"], snap, None)
+        evidence, review = c.evidence, review or c.review
+        if c.hit is None:
+            status = RuleStatus.UNAVAILABLE if c.missing else RuleStatus.MANUAL
+            return RuleResult(rule.id, rule.title, status, evidence, review=review), None
+        if not c.hit:
+            continue
+        entry, stop, target = (_field(block.get(k), snap) for k in ("entry", "stop", "target"))
+        review = review or entry.review or stop.review or target.review
+        evidence = evidence + entry.evidence + stop.evidence + target.evidence
+        if entry.hit is None or entry.value is None:
+            status = RuleStatus.UNAVAILABLE if entry.missing else RuleStatus.MANUAL
+            return RuleResult(rule.id, rule.title, status, evidence, review=review), None
+        grade = next(
+            (g for g in (c.grade, entry.grade, stop.grade, target.grade) if g),
+            "B" if review else "A",
+        )
+        cand = Candidate(rule.id, rule.id, entry.value, stop.value, target.value, grade, evidence)
+        quotes = (f"entry={entry.value}", f"stop={stop.value}", f"target={target.value}")
+        rr = RuleResult(rule.id, rule.title, RuleStatus.PASS, quotes + evidence, review=review)
+        return rr, cand
+    return RuleResult(rule.id, rule.title, RuleStatus.PASS, evidence, review=review), None
 
 
 def evaluate(rule: Rule, snap: Snapshot, candidate: Candidate | None = None) -> RuleResult:
@@ -61,6 +100,8 @@ def evaluate(rule: Rule, snap: Snapshot, candidate: Candidate | None = None) -> 
     for block in rule.blocks:
         if block["kind"] == "manual":
             return RuleResult(rule.id, rule.title, RuleStatus.MANUAL, (block["ask"],), cid)
+        if block["kind"] == "setup":
+            continue
         c = check_all(block["when"], snap, candidate)
         evidence, review = c.evidence, review or c.review
         if c.hit is None:
@@ -71,16 +112,23 @@ def evaluate(rule: Rule, snap: Snapshot, candidate: Candidate | None = None) -> 
     return RuleResult(rule.id, rule.title, RuleStatus.PASS, evidence, cid, review)
 
 
-def run(
-    playbook: str | Path, snap: Snapshot, candidates: tuple[Candidate, ...] = ()
-) -> list[RuleResult]:
-    """运行整份 playbook。scope: candidate 的规则对每个候选买点各运行一次。"""
-    results = []
-    for rule in parse(Path(playbook).read_text(encoding="utf-8")):
-        if not rule.blocks:
+def run(playbook: str | Path, snap: Snapshot, candidates: tuple[Candidate, ...] = ()) -> RunOutput:
+    """先跑 setup 产出候选，再跑其余规则。scope: candidate 对每个候选各一次。"""
+    results: list[RuleResult] = []
+    produced: list[Candidate] = []
+    rules = [r for r in parse(Path(playbook).read_text(encoding="utf-8")) if r.blocks]
+    for rule in rules:
+        if rule.blocks[0].get("kind") == "setup":
+            rr, cand = evaluate_setup(rule, snap)
+            results.append(rr)
+            if cand:
+                produced.append(cand)
+    all_cands = candidates + tuple(produced)
+    for rule in rules:
+        if rule.blocks[0].get("kind") == "setup":
             continue
         if rule.blocks[0].get("scope") == "candidate":
-            results += [evaluate(rule, snap, c) for c in candidates]
+            results += [evaluate(rule, snap, c) for c in all_cands]
         else:
             results.append(evaluate(rule, snap))
-    return results
+    return RunOutput(tuple(results), all_cands)

@@ -6,6 +6,8 @@ EP301 的案例全部通过真实 playbook（playbooks/technical.md）运行。
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from tradesys.adapters.fake import fake_snapshot, make_bars
 from tradesys.calendar_utils import make_snapshot
 from tradesys.models import Candidate, Fundamental, Line, RuleStatus, Zone
@@ -16,8 +18,12 @@ PRIOR_20 = [100.0] + [101.0] * 19  # 前 20 日收盘最低 100
 SNAP = fake_snapshot(make_bars(PRIOR_20 + [105.0]))
 
 
+def _rows(out):
+    return out.results if hasattr(out, "results") else out
+
+
 def _status(results, rule_id, candidate_id=None):
-    (r,) = [r for r in results if r.rule_id == rule_id and r.candidate_id == candidate_id]
+    (r,) = [r for r in _rows(results) if r.rule_id == rule_id and r.candidate_id == candidate_id]
     return r.status
 
 
@@ -70,12 +76,12 @@ def test_v11_shrinking_new_high_vetoes():
 
 
 def test_manual_rules_need_no_code():
-    results = run(PLAYBOOK, SNAP)
+    results = run(PLAYBOOK, SNAP).results
     assert {r.rule_id for r in results if r.status == RuleStatus.MANUAL} >= {"V06", "V08", "V09"}
 
 
 def test_candidate_rules_skip_without_candidates():
-    assert {r.rule_id for r in run(PLAYBOOK, SNAP)}.isdisjoint({"V05", "V12", "V13", "V14"})
+    assert {r.rule_id for r in run(PLAYBOOK, SNAP).results}.isdisjoint({"V05", "V12", "V13", "V14"})
 
 
 def test_intraday_as_of_uses_previous_session():
@@ -108,12 +114,14 @@ def test_changing_playbook_threshold_changes_result(tmp_path):
 
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
     rules = {r.id: r for r in parse(PLAYBOOK.read_text(encoding="utf-8"))}
-    assert rules["V16"].blocks == ()
+    assert rules["S01"].blocks == ()
     assert len(rules["V02"].blocks) == 1
-    assert len(rules["V03"].blocks) == 2
+    assert len(rules["V03"].blocks) == 3
     assert len(rules["V04"].blocks) == 2
     assert len(rules["V10"].blocks) == 3
     assert len(rules["V14"].blocks) == 2
+    assert len(rules["V16"].blocks) == 1
+    assert len(rules["S05"].blocks) == 2
 
 
 def _weekdays_after(d, n):
@@ -149,7 +157,7 @@ def test_v07_downtrend_earnings_drop_and_expand_vetoes():
     bars = make_bars(prior + [prior[-1] * 0.96], [1e6] * 29 + [2e6])
     snap = fake_snapshot(bars, next_earnings=_weekdays_after(bars.last.d, 2))
     results = run(PLAYBOOK, snap)
-    r = next(x for x in results if x.rule_id == "V07")
+    r = next(x for x in results.results if x.rule_id == "V07")
     assert r.status == RuleStatus.VETO
     assert r.review
     assert "请确认无明显利空消息" in r.evidence
@@ -235,8 +243,9 @@ def test_v03_uptrend_close_below_vetoes():
     assert _status(run(PLAYBOOK, snap), "V03") == RuleStatus.VETO
 
 
-def test_v03_no_lines_is_manual():
-    assert _status(run(PLAYBOOK, SNAP), "V03") == RuleStatus.MANUAL
+def test_v03_no_lines_falls_through_to_fib():
+    # SNAP 未跌破 60 日 Fib → PASS（无线不再短路成 MANUAL）
+    assert _status(run(PLAYBOOK, SNAP), "V03") == RuleStatus.PASS
 
 
 def test_v12_entry_far_from_support_vetoes():
@@ -287,3 +296,60 @@ def test_v13_room_to_next_resistance_passes():
         ),
     )
     assert _status(run(PLAYBOOK, snap, (_cand(99, 90),)), "V13", "c1") == RuleStatus.PASS
+
+
+def test_v03_fib618_recent_break_vetoes():
+    closes = [100.0 + i for i in range(59)] + [119.0]
+    assert _status(run(PLAYBOOK, fake_snapshot(make_bars(closes))), "V03") == RuleStatus.VETO
+
+
+def test_s05_first_red_pullback_to_ma5_emits_candidate():
+    closes = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 104.0]
+    snap = fake_snapshot(make_bars(closes, lows=[*closes[:-1], 103.0]))
+    out = run(PLAYBOOK, snap)
+    (cand,) = [c for c in out.candidates if c.setup_id == "S05"]
+    assert cand.entry == 104.0
+    assert cand.stop == pytest.approx(103.0 * 0.99)
+    assert _status(out, "S05") == RuleStatus.PASS
+
+
+def test_s06_dry_then_engulfing_emits_candidate():
+    prior = [130.0 - i for i in range(28)]
+    opens = prior + [103.0, 97.0]
+    highs = prior + [103.0, 104.0]
+    lows = prior + [98.0, 97.0]
+    closes = prior + [99.0, 104.0]
+    vols = [1e6] * 28 + [4e5, 2e6]
+    snap = fake_snapshot(make_bars(closes, vols, opens=opens, highs=highs, lows=lows))
+    out = run(PLAYBOOK, snap)
+    (cand,) = [c for c in out.candidates if c.setup_id == "S06"]
+    assert cand.entry == 104.0
+    assert cand.grade == "B"
+    assert _status(out, "S06") == RuleStatus.PASS
+
+
+def test_s07_hammer_after_shrinking_new_low():
+    prior = [130.0 - i for i in range(29)]  # 130..102
+    closes = prior + [100.0]
+    opens = prior + [101.0]
+    highs = prior + [101.0]
+    lows = prior + [96.0]
+    vols = [1e6] * 28 + [5e5, 2e6]
+    snap = fake_snapshot(make_bars(closes, vols, opens=opens, highs=highs, lows=lows))
+    out = run(PLAYBOOK, snap)
+    (cand,) = [c for c in out.candidates if c.setup_id == "S07"]
+    assert cand.grade == "C"
+    assert cand.stop == pytest.approx(96.0 * 0.99)
+    assert _status(out, "S07") == RuleStatus.PASS
+    assert _status(out, "V01") == RuleStatus.VETO
+
+
+def test_v16_top_divergence_in_overbought_vetoes():
+    # 长上涨把 RSI-6 顶到 100，再做一个更高的第二高点但中间深回落压低 RSI
+    up = [100.0 + i for i in range(40)]
+    pull = [up[-1] - 2 * i for i in range(1, 8)]
+    # 第二峰略高于第一峰：第一峰 = up[-1]=139；回落后再抬
+    rally = [pull[-1] + 3 * i for i in range(1, 10)]
+    tail = [rally[-1] - 0.5, rally[-1] - 1.0]  # 右侧两根略低，RSI 仍 > 80
+    closes = up + pull + rally + tail
+    assert _status(run(PLAYBOOK, fake_snapshot(make_bars(closes))), "V16") == RuleStatus.VETO

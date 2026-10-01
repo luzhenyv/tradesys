@@ -229,7 +229,13 @@ when:
 ```rule
 kind: veto
 when:
-  - line_broken_within: {kind: neckline, days: 2, side: below}    # Fib 61.8% 留到 ④
+  - line_broken_within: {kind: neckline, days: 2, side: below}
+```
+
+```rule
+kind: veto
+when:
+  - fib_broken: {level: 0.618, days: 2}   # P-FIB simple · 近 60 日
 ```
 - **Status**：confirmed
 
@@ -479,6 +485,12 @@ when:
 - **Output**：VETO
 - **Automation**：auto
 - **Source**：EP301§R16 · Voice 核对 ✔
+```rule
+kind: veto
+when:
+  - rsi_above: {period: 6, x: 80}        # v16.rsi_overbought · source
+  - divergence: {kind: top, max_gap: 30, k: 2}
+```
 - **Status**：confirmed
 
 ## 3.3 特殊场景（V17–V18）
@@ -565,6 +577,27 @@ when:
 - **Stop**：`low[T] × (1 − stop.buffer_pct)`
 - **Note**：原文强调此类止损常偏大，V05 / V14 会自然过滤。
 - **Source**：EP302§B5 · Voice 核对 ✔（"第一次下跌收跌，它就回踩到了最近的一条MA……连续几个阴跌跌下来，慢慢摸到均线，无效"）。`min_streak` 为默认值。
+```rule
+kind: setup
+when:
+  - up_streak: {n: 5}                 # s05.min_streak · 默认值
+  - first_down: {}
+  - pullback_to_ma: {n: 5}
+entry: {session_close: {}}
+stop: {buffered_low: {pct: 0.01}}     # stop.buffer_pct · 默认值
+target: {nearest_resistance: {}}
+```
+
+```rule
+kind: setup
+when:
+  - up_streak: {n: 5}
+  - first_down: {}
+  - pullback_to_ma: {n: 10}
+entry: {session_close: {}}
+stop: {buffered_low: {pct: 0.01}}
+target: {nearest_resistance: {}}
+```
 - **Status**：confirmed
 
 ### S06 极度缩量后放量看涨吞没
@@ -576,6 +609,29 @@ when:
   3. T：一级看涨吞没（实体包裹 T-1 全部实体与影线），P-VOL = `expand`，上影线 ≤ `candle.short_shadow_ratio`
 - **Stop**：`low[T] × (1 − stop.buffer_pct)`
 - **Source**：EP302§B6 · Voice 核对 ✔
+```rule
+kind: setup
+when:
+  - trend: {direction: down}
+  - volume_dry: {ratio: 0.6, offset: 1}          # s06.dry_ratio · 默认值
+  - bullish_engulfing: {tier: 1, short_shadow_ratio: 0.1}
+  - volume_state: {state: expand}
+entry: {session_close: {}}
+stop: {buffered_low: {pct: 0.01}}
+target: {nearest_resistance: {}}
+```
+
+```rule
+kind: setup
+when:
+  - trend: {direction: sideways}
+  - volume_dry: {ratio: 0.6, offset: 1}
+  - bullish_engulfing: {tier: 1, short_shadow_ratio: 0.1}
+  - volume_state: {state: expand}
+entry: {session_close: {}}
+stop: {buffered_low: {pct: 0.01}}
+target: {nearest_resistance: {}}
+```
 - **Status**：confirmed
 
 ### S07 缩量新低后放量锤子线
@@ -588,6 +644,18 @@ when:
 - **Grade**：T 日收盘仍为近期新低 → `C`（中性，等待 1 个交易日）。此时 V01 也会否决。
 - **Stop**：`low[T] × (1 − stop.buffer_pct)`
 - **Source**：EP302§B7、EP124 · Voice 核对 ✔
+```rule
+kind: setup
+when:
+  - trend: {direction: down}
+  - new_low: {n: 20, offset: 1}
+  - volume_state: {state: shrink, offset: 1}
+  - hammer: {}
+  - volume_state: {state: expand}
+entry: {session_close: {}}
+stop: {buffered_low: {pct: 0.01}}
+target: {nearest_resistance: {}}
+```
 - **Status**：confirmed
 
 ### S08 板块突破日龙头放量大阳
@@ -655,4 +723,4 @@ Advice 只提醒，不影响结论。
 ## 后续工作
 
 - 实盘校准 rule 块中注释为"默认值"的参数，校准后改为"已裁决"。
-- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加 rule 块：V01–V15（V03 的 Fib 留到 ④）、S08。
+- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加：V01–V16、S05–S08。S01–S04、S09 留 ④b。

@@ -78,7 +78,7 @@ def test_fetch_meta_live_runs_through_playbook():
     snap = fetch_snapshot("META", datetime.now(ET))
     assert len(snap.bars.items) > 200
     assert snap.fundamental is not None and snap.fundamental.market_cap > 1e11
-    results = run("playbooks/technical.md", snap)
+    results = run("playbooks/technical.md", snap).results
     assert {r.rule_id for r in results} >= {"V01", "V11"}
 
 

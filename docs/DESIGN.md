@@ -35,6 +35,7 @@ tradesys/cli.py     薄壳：每个工具、执行器都能单独从命令行调
 | `Candidate` | 候选买点：entry、stop、target、grade、evidence；`rr` 为计算属性 |
 | `Check` | 一个工具的输出：`hit`（True / False / None）、evidence、review、missing |
 | `RuleResult` | 一条规则的结果：rule_id、title、status、evidence、candidate_id、review |
+| `RunOutput` | 一次运行：`results` + `candidates`（setup 产出及 CLI 注入） |
 
 `RuleStatus`：`PASS / VETO / WARN / MANUAL / UNAVAILABLE`。
 - `WARN` 不阻断，由用户决定。
@@ -59,7 +60,21 @@ when:                   # 列表中全部工具 hit=True 才命中（只有 AND�
 - **没有 OR、没有表达式语言。** 需要 OR 就拆成两个 rule 块，或写成一个工具。
 - **阈值写在 rule 块里**，就在规则原文旁边。不另设配置文件。
 - **没有 rule 块的规则** = 尚未实现，执行器跳过。
-- **`kind: setup`**（产生 Candidate）：在 `when` 之外用工具名声明 `entry` / `stop` / `target`。语法在实现第一个 Setup 时确定。
+- **`kind: setup`**（产生 Candidate）。`when` 与 veto 相同（AND）。命中后用工具取价：
+
+```yaml
+kind: setup
+when:
+  - first_down: {}
+  - pullback_to_ma: {n: 5}
+entry: {session_close: {}}
+stop: {buffered_low: {pct: 0.01}}
+target: {nearest_resistance: {}}     # 没有阻力则 value=None，仍产出
+```
+
+  多个 setup 块 = if / elif，每条规则最多 1 个 Candidate。entry 失败则不产出；stop / target 可为 None。
+  `Check.value` 为价格；`Check.grade` 若有则用之，否则 `review=True` → `B`，否则 `A`。
+  执行器先跑全部 setup，再跑其余规则（含 `scope: candidate`）。`run` 返回 `RunOutput(results, candidates)`。
 
 ## 5. 工具
 

@@ -1,6 +1,6 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：①②③ 已完成；④ 起未开始。
+> 状态：①②③④a 已完成；④b / ⑤ 未开始。
 > 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
@@ -39,9 +39,17 @@
 
 ## ④ Setups 与 simple 原语
 
-- 先确定 `kind: setup` 的语法（`entry` / `stop` / `target` 的声明方式），写进 DESIGN §4。
-- simple 原语：P-SWING、P-FIB、P-DIVERGENCE、P-CANDLE（锤子线、看涨吞没、流星线）。
-- 规则：V16；S01–S07、S09。S08 已是 manual 块。
+### ④a 语法 + 不依赖 YAML 的 Setup ✅（2026-10-02）
+
+- DESIGN §4：`kind: setup` + `entry`/`stop`/`target` 工具取 `Check.value`。每条最多 1 个 Candidate。
+- `run()` 返回 `RunOutput(results, candidates)`：先跑 setup，再跑其余规则。
+- 原语：P-SWING、P-FIB（60 日）、P-DIVERGENCE、P-CANDLE（锤子 / 一级吞没 / 流星）。
+- 规则：V16、V03 Fib、S05、S06、S07。S08 已是 manual。
+- `new_low` / `volume_state` 增加可选 `offset`。
+
+### ④b YAML Setup（未开始）
+
+- S01–S04、S09。绑定 Zone/Line，不写 `setups/s03.py`。
 
 ## ⑤ 报告
 

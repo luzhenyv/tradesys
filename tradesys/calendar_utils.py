@@ -3,6 +3,7 @@
 系统内部统一使用 UTC 时间；只在涉及美股交易时段与交易日时转换为美东时间（ET）。
 """
 
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -79,6 +80,17 @@ def weekdays_between(start: date, end: date) -> int:
         n += d.weekday() < 5
         d += timedelta(days=1)
     return n
+
+
+def at_offset(snap: Snapshot, offset: int) -> Snapshot:
+    """去掉最后 offset 根，在 T−offset 上求值。offset=0 原样返回。"""
+    if offset <= 0:
+        return snap
+    items = snap.bars.items[:-offset] if offset < len(snap.bars.items) else ()
+    bars = Bars(snap.bars.ticker, items)
+    if not items:
+        return replace(snap, bars=bars)
+    return replace(snap, bars=bars, session_date=items[-1].d)
 
 
 def make_snapshot(bars: Bars, as_of: datetime, **inputs) -> Snapshot:
