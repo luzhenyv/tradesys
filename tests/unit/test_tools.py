@@ -125,6 +125,37 @@ def test_listing_tools_missing_data():
     assert market_cap_below(snap, usd=5e9).missing
 
 
+def test_fib_holds_until_close_breaks_level():
+    from tradesys.tools.fib import fib_holds
+
+    up = fake_snapshot(make_bars([100.0 + i for i in range(40)]))
+    assert fib_holds(up, 0.618).hit
+    broken = fake_snapshot(make_bars([100.0 + i for i in range(30)] + [110.0]))
+    # 100→129 then 110 跌破 618≈111
+    assert not fib_holds(broken, 0.618).hit
+
+
+def test_rsi_below_within_sees_recent_trough():
+    from tradesys.tools.rsi import rsi_below_within
+
+    up = fake_snapshot(make_bars([100.0 + i for i in range(20)]))
+    assert not rsi_below_within(up, 6, 20, 10).hit
+    drop = fake_snapshot(make_bars([130.0 - i for i in range(20)]))
+    assert rsi_below_within(drop, 6, 20, 10).hit
+
+
+def test_bottom_divergence_two_lower_lows_higher_rsi():
+    from tradesys.tools.swing import divergence
+
+    up = [100.0 + i for i in range(32)]
+    drop = [up[-1] - 2 * i for i in range(1, 15)]
+    bounce = [drop[-1] + 0.3 + 0.2 * i for i in range(12)]
+    l2 = drop[-1] - 0.15
+    closes = up + drop + bounce + [l2, l2 + 2, l2 + 1.5]
+    snap = fake_snapshot(make_bars(closes))
+    assert divergence(snap, "bottom").hit
+
+
 def test_listing_tools_hit_on_otc_and_small_cap():
     snap = fake_snapshot(make_bars([100.0] * 5), fundamental=Fundamental(1e9, "PNK", None))
     assert exchange_not_in(snap, codes=["NYQ", "NMS"]).hit

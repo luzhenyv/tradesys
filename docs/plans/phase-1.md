@@ -1,6 +1,6 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：①②③④a 已完成；④b / ⑤ 未开始。
+> 状态：①②③④ 已完成；⑤ 未开始。
 > 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
@@ -47,9 +47,12 @@
 - 规则：V16、V03 Fib、S05、S06、S07。S08 已是 manual。
 - `new_low` / `volume_state` 增加可选 `offset`。
 
-### ④b YAML Setup（未开始）
+### ④b YAML Setup ✅（2026-10-02）
 
-- S01–S04、S09。绑定 Zone/Line，不写 `setups/s03.py`。
+- S01–S04、S09。when 与 stop 共用查找函数（最近一次符合的 Zone/Line）。不写 `setups/s03.py`。
+- 无 YAML：S01–S04 → MANUAL。S09 用 Fib 61.8% 当支撑，不依赖 YAML。
+- `check_all`：`hit=None` 优先于 False（缺结构时不因另一工具 False 而变成 PASS）。
+- 包约 1826 行（超 1500；YAML 绑定工具所致）。
 
 ## ⑤ 报告
 

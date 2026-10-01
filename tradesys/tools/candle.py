@@ -40,6 +40,27 @@ def bullish_engulfing(snap: Snapshot, tier: int = 1, short_shadow_ratio: float =
     return Check(True, ("一级看涨吞没",), review=True)
 
 
+def stop_candle(snap: Snapshot) -> Check:
+    """止跌形态：锤子线或一级看涨吞没。"""
+    h, e = hammer(snap), bullish_engulfing(snap)
+    if h.hit:
+        return h
+    if e.hit:
+        return e
+    return Check(False, ("无止跌形态",), review=True)
+
+
+def green_expand(snap: Snapshot) -> Check:
+    """放量阳线：收盘 > 开盘且 P-VOL=expand。"""
+    from tradesys.tools.volume import volume_state
+
+    if not snap.bars.items:
+        return Check(None, ("无K线",), missing=True)
+    b, vol = snap.bars.last, volume_state(snap, "expand")
+    hit = b.close > b.open and vol.hit is True
+    return Check(hit, (*vol.evidence, f"open={b.open}", f"close={b.close}"))
+
+
 def shooting_star(snap: Snapshot, short_shadow_ratio: float = 0.1) -> Check:
     """上影 ≥ 2×实体，下影极短。"""
     if not snap.bars.items:

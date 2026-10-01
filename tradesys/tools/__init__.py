@@ -7,14 +7,22 @@ candidate 规则里可以组合不接收 candidate 的工具（只看 Snapshot�
 import inspect
 
 from tradesys.tools.band68 import band68_range
-from tradesys.tools.candle import bullish_engulfing, hammer, shooting_star
-from tradesys.tools.fib import fib_broken
+from tradesys.tools.candle import (
+    bullish_engulfing,
+    green_expand,
+    hammer,
+    shooting_star,
+    stop_candle,
+)
+from tradesys.tools.fib import fib_broken, fib_holds, fib_stop, impulse_high
+from tradesys.tools.flag import buffered_flag_lower, flag_break, flag_pole_high
 from tradesys.tools.listing import days_to_earnings, exchange_not_in, market_cap_below
 from tradesys.tools.price import close_up, drop_pct, new_high, new_low
 from tradesys.tools.proximity import far_from_support, tight_to_resistance
 from tradesys.tools.quote import buffered_low, nearest_resistance, session_close
+from tradesys.tools.retest import buffered_line, buffered_zone_low, retest_breakout, retest_line
 from tradesys.tools.risk import rr_below, stop_wider_than
-from tradesys.tools.rsi import rsi_above, rsi_below
+from tradesys.tools.rsi import rsi_above, rsi_below, rsi_below_within
 from tradesys.tools.setup import first_down, pullback_to_ma, up_streak
 from tradesys.tools.structure import line_broken_within, zone_broken_within
 from tradesys.tools.swing import divergence
@@ -38,11 +46,24 @@ TOOLS = {
     "trend": trend,
     "rsi_above": rsi_above,
     "rsi_below": rsi_below,
+    "rsi_below_within": rsi_below_within,
     "divergence": divergence,
     "fib_broken": fib_broken,
+    "fib_holds": fib_holds,
+    "fib_stop": fib_stop,
+    "impulse_high": impulse_high,
     "hammer": hammer,
     "bullish_engulfing": bullish_engulfing,
     "shooting_star": shooting_star,
+    "stop_candle": stop_candle,
+    "green_expand": green_expand,
+    "retest_breakout": retest_breakout,
+    "retest_line": retest_line,
+    "buffered_zone_low": buffered_zone_low,
+    "buffered_line": buffered_line,
+    "flag_break": flag_break,
+    "buffered_flag_lower": buffered_flag_lower,
+    "flag_pole_high": flag_pole_high,
     "up_streak": up_streak,
     "first_down": first_down,
     "pullback_to_ma": pullback_to_ma,

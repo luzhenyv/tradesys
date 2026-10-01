@@ -524,6 +524,25 @@ when:
      - B：T 日出现放量阳线（`close > open` 且 `expand`）
 - **Stop**：`zone.low × (1 − stop.buffer_pct)`
 - **Source**：EP302§B1 · Voice 核对 ✔（案例：META 638–680 区间）
+```rule
+kind: setup
+when:
+  - retest_breakout: {lookback: 20}   # s01.lookback_days · 默认值
+  - stop_candle: {}
+entry: {session_close: {}}
+stop: {buffered_zone_low: {lookback: 20, pct: 0.01}}
+target: {nearest_resistance: {}}
+```
+
+```rule
+kind: setup
+when:
+  - retest_breakout: {lookback: 20}
+  - green_expand: {}
+entry: {session_close: {}}
+stop: {buffered_zone_low: {lookback: 20, pct: 0.01}}
+target: {nearest_resistance: {}}
+```
 - **Status**：confirmed
 
 ### S02 下行趋势线放量突破 → 缩量回踩不破
@@ -536,6 +555,15 @@ when:
 - **Stop**：`line(T) × (1 − stop.buffer_pct)`
 - **Note**：激进模式（突破当日直接买）不实现。
 - **Source**：EP302§B2 · Voice 核对 ✔
+```rule
+kind: setup
+when:
+  - retest_line: {kind: trendline, side: above, lookback: 20, slope: down, near_pct: 0.03}
+  - volume_state: {state: shrink}
+entry: {session_close: {}}
+stop: {buffered_line: {kind: trendline, side: above, lookback: 20, slope: down, pct: 0.01}}
+target: {nearest_resistance: {}}
+```
 - **Status**：confirmed
 
 ### S03 上升旗形放量突破 A 线
@@ -551,7 +579,15 @@ when:
 - **Target**：T1 = 旗杆顶；T2 = entry + (旗杆顶 − 旗杆底)。Candidate.target 取 T1，T2 写入 evidence。
 - **Note**：B 线左侧买点（EP150）暂不实现，作为未来的 S03b。
 - **Source**：EP302§B3、EP150 · Voice 核对 ✔
-- **Implementation**：`setups/s03.py`
+```rule
+kind: setup
+when:
+  - flag_break: {}
+  - green_expand: {}
+entry: {session_close: {}}
+stop: {buffered_flag_lower: {pct: 0.01}}
+target: {flag_pole_high: {}}
+```
 - **Status**：confirmed
 
 ### S04 W 底 / 头肩底颈线突破 → 回踩不破
@@ -564,6 +600,14 @@ when:
 - **Stop**：`neckline(T) × (1 − stop.buffer_pct)`
 - **分时**：原文"分时主动买盘强抵抗"只作为 A-INTRADAY 备忘，不参与判定。
 - **Source**：EP302§B4 · Voice 核对 ✔
+```rule
+kind: setup
+when:
+  - retest_line: {kind: neckline, side: above, lookback: 20, touch_pct: 0.02}
+entry: {session_close: {}}
+stop: {buffered_line: {kind: neckline, side: above, lookback: 20, pct: 0.01}}
+target: {nearest_resistance: {}}
+```
 - **Status**：confirmed
 
 ### S05 强势连阳后首次阴线回踩 MA5 / MA10
@@ -681,6 +725,17 @@ ask: 今日所属板块指数是否突破？该股是否为放量实体大阳突
 - **Target**：回撤起点的 swing high
 - **Note**：voice 原文"超卖是RSI大于80"为口误，按惯例取 RSI-6 < 20，已确认。
 - **Source**：EP302§B9 · Voice 核对 ✔（发现口误）
+```rule
+kind: setup
+when:
+  - fib_holds: {level: 0.618}
+  - rsi_below_within: {period: 6, x: 20, days: 30}
+  - divergence: {kind: bottom, max_gap: 30, k: 2}
+  - stop_candle: {}
+entry: {session_close: {}}
+stop: {fib_stop: {level: 0.618, pct: 0.01}}
+target: {impulse_high: {}}
+```
 - **Status**：confirmed
 
 ---
@@ -723,4 +778,4 @@ Advice 只提醒，不影响结论。
 ## 后续工作
 
 - 实盘校准 rule 块中注释为"默认值"的参数，校准后改为"已裁决"。
-- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加：V01–V16、S05–S08。S01–S04、S09 留 ④b。
+- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加：V01–V16、S01–S09。

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tradesys.adapters.fake import fake_snapshot, make_bars
+from tradesys.adapters.fake import fake_snapshot, make_bars, trading_days
 from tradesys.calendar_utils import make_snapshot
 from tradesys.models import Candidate, Fundamental, Line, RuleStatus, Zone
 from tradesys.run import parse, run
@@ -114,7 +114,7 @@ def test_changing_playbook_threshold_changes_result(tmp_path):
 
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
     rules = {r.id: r for r in parse(PLAYBOOK.read_text(encoding="utf-8"))}
-    assert rules["S01"].blocks == ()
+    assert len(rules["S01"].blocks) == 2
     assert len(rules["V02"].blocks) == 1
     assert len(rules["V03"].blocks) == 3
     assert len(rules["V04"].blocks) == 2
@@ -353,3 +353,77 @@ def test_v16_top_divergence_in_overbought_vetoes():
     tail = [rally[-1] - 0.5, rally[-1] - 1.0]  # 右侧两根略低，RSI 仍 > 80
     closes = up + pull + rally + tail
     assert _status(run(PLAYBOOK, fake_snapshot(make_bars(closes))), "V16") == RuleStatus.VETO
+
+
+def test_s01_s04_without_structure_are_manual():
+    out = run(PLAYBOOK, SNAP)
+    for sid in ("S01", "S02", "S03", "S04"):
+        assert _status(out, sid) == RuleStatus.MANUAL
+
+
+def test_s01_breakout_retest_emits_candidate():
+    z = Zone("z-100-120", "resistance", 100.0, 120.0)
+    n = 12
+    closes = [110.0] * n + [125.0, 115.0]
+    vols = [1e6] * n + [2e6, 3e6]
+    opens = [110.0] * n + [125.0, 112.0]
+    snap = fake_snapshot(
+        make_bars(closes, vols, opens=opens, highs=closes, lows=opens),
+        zones=(z,),
+    )
+    out = run(PLAYBOOK, snap)
+    (c,) = [x for x in out.candidates if x.setup_id == "S01"]
+    assert c.entry == 115.0
+    assert c.stop == pytest.approx(99.0)
+
+
+def test_s02_downtrend_break_retest_emits_candidate():
+    days = trading_days(date(2026, 1, 5), 10)
+    line = Line("dn", "trendline", (days[0], 104.0), (days[9], 100.0))
+    closes = [90.0] * 7 + [105.0, 102.0, 101.5]
+    vols = [1e6] * 7 + [2e6, 1e6, 5e5]
+    snap = fake_snapshot(make_bars(closes, vols), lines=(line,))
+    out = run(PLAYBOOK, snap)
+    (c,) = [x for x in out.candidates if x.setup_id == "S02"]
+    lv = line.value_at(snap.session_date)
+    assert c.stop == pytest.approx(lv * 0.99)
+
+
+def test_s04_neckline_retest_emits_candidate():
+    days = trading_days(date(2026, 1, 5), 8)
+    line = Line("nk", "neckline", (days[0], 100.0), (days[5], 100.0))
+    closes = [90.0] * 5 + [105.0, 103.0, 101.0]
+    lows = [90.0] * 5 + [105.0, 103.0, 99.0]
+    vols = [1e6] * 5 + [2e6, 1e6, 1e6]
+    snap = fake_snapshot(make_bars(closes, vols, lows=lows), lines=(line,))
+    out = run(PLAYBOOK, snap)
+    (c,) = [x for x in out.candidates if x.setup_id == "S04"]
+    assert c.stop == pytest.approx(100.0 * 0.99)
+
+
+def test_s03_flag_break_emits_candidate():
+    days = trading_days(date(2026, 1, 5), 40)
+    # 前 20 日低量，后 10 日旗杆放量上涨，再 9 日旗面，T 突破 A
+    a = Line("A", "flag_upper", (days[30], 120.0), (days[39], 114.0))
+    b = Line("B", "flag_lower", (days[30], 108.0), (days[39], 102.0))
+    closes = [80.0] * 20 + [80.0 + 4 * i for i in range(10)] + [118.0] * 9 + [116.0]
+    # pole last = 80+36=116? range(10)=0..9 → 80..116. Flag 118s then T 116 — T must close > A(T)
+    # A at last day: from 120 to 114 over 9 calendar steps... use days[30] to days[39]
+    vols = [5e5] * 20 + [2e6] * 10 + [6e5] * 9 + [2e6]
+    opens = closes[:-1] + [114.0]  # T 阳线
+    highs = closes[:-1] + [116.0]
+    snap = fake_snapshot(
+        make_bars(closes, vols, opens=opens, highs=highs, lows=opens),
+        lines=(a, b),
+    )
+    at = a.value_at(snap.session_date)
+    # 确保 T 收盘高于 A
+    assert closes[-1] > at
+    out = run(PLAYBOOK, snap)
+    (c,) = [x for x in out.candidates if x.setup_id == "S03"]
+    assert c.target == 80.0 + 4 * 9  # pole high 116
+
+
+def test_s09_without_pattern_passes():
+    assert _status(run(PLAYBOOK, SNAP), "S09") == RuleStatus.PASS
+    assert not any(c.setup_id == "S09" for c in run(PLAYBOOK, SNAP).candidates)

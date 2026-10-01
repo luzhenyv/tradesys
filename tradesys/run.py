@@ -48,10 +48,10 @@ def check_all(when: list[dict], snap: Snapshot, candidate: Candidate | None) -> 
     evidence = tuple(e for c in checks for e in c.evidence)
     review = any(c.review for c in checks)
     grade = next((c.grade for c in checks if c.grade), None)
-    if any(c.hit is False for c in checks):
-        return Check(False, evidence, review, grade=grade)
     if any(c.hit is None for c in checks):
         return Check(None, evidence, review, missing=any(c.missing for c in checks), grade=grade)
+    if any(c.hit is False for c in checks):
+        return Check(False, evidence, review, grade=grade)
     return Check(True, evidence, review, grade=grade)
 
 

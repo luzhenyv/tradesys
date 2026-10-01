@@ -12,6 +12,11 @@ def volume_ratios(vols: tuple[float, ...]) -> tuple[float | None, float | None]:
     return prev, (v / base if base else None)
 
 
+def state_at(vols: tuple[float, ...], shrink: float = 1.0, expand: float = 1.0) -> str:
+    """截至该序列最后一根的量能状态。"""
+    return classify(*volume_ratios(vols), shrink, expand)
+
+
 def classify(prev: float | None, ma5: float | None, shrink: float, expand: float) -> str:
     """两个量比都低于 shrink → shrink；都高于 expand → expand；其余 neutral。"""
     if prev is None or ma5 is None:

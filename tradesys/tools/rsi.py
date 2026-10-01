@@ -50,3 +50,13 @@ def rsi_below(snap: Snapshot, period: int, x: float) -> Check:
     if value is None:
         return Check(None, (f"历史不足 {period + 1} 根",), missing=True)
     return Check(value < x, (f"RSI-{period}={value:.1f}", f"x={x}"))
+
+
+def rsi_below_within(snap: Snapshot, period: int, x: float, days: int) -> Check:
+    """最近 days 根内 RSI 是否曾低于 x。"""
+    series = rsi_series(snap.bars.closes, period)[-days:]
+    vals = [v for v in series if v is not None]
+    if not vals:
+        return Check(None, (f"历史不足 {period + 1} 根",), missing=True)
+    hit = any(v < x for v in vals)
+    return Check(hit, (f"min RSI-{period}={min(vals):.1f}", f"x={x}"))
