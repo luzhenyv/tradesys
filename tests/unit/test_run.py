@@ -3,12 +3,12 @@
 EP301 的案例全部通过真实 playbook（playbooks/technical.md）运行。
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from tradesys.adapters.fake import fake_snapshot, make_bars
 from tradesys.calendar_utils import make_snapshot
-from tradesys.models import Candidate, RuleStatus
+from tradesys.models import Candidate, Fundamental, RuleStatus
 from tradesys.run import parse, run
 
 PLAYBOOK = Path(__file__).parents[2] / "playbooks" / "technical.md"
@@ -109,4 +109,96 @@ def test_changing_playbook_threshold_changes_result(tmp_path):
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
     rules = {r.id: r for r in parse(PLAYBOOK.read_text(encoding="utf-8"))}
     assert rules["V02"].blocks == ()
+    assert len(rules["V04"].blocks) == 2
+    assert len(rules["V10"].blocks) == 3
     assert len(rules["V14"].blocks) == 2
+
+
+def _weekdays_after(d, n):
+    cur = d
+    added = 0
+    while added < n:
+        cur += timedelta(days=1)
+        if cur.weekday() < 5:
+            added += 1
+    return cur
+
+
+def test_v04_up_day_with_shrinking_volume_vetoes():
+    snap = fake_snapshot(make_bars([100.0] * 6 + [101.0], [1e6] * 6 + [5e5]))
+    assert _status(run(PLAYBOOK, snap), "V04") == RuleStatus.VETO
+
+
+def test_v04_five_day_rise_with_declining_volume_vetoes():
+    # T 日收跌，条件 1 不成立；相对 T-5 仍上涨，量能逐日萎缩且 MA5 拐头
+    closes = [100.0, 101.0, 102.0, 103.0, 106.0, 105.0]
+    vols = [100.0, 90.0, 80.0, 70.0, 60.0, 50.0]
+    assert _status(run(PLAYBOOK, fake_snapshot(make_bars(closes, vols))), "V04") == RuleStatus.VETO
+
+
+def test_v04_expanding_drop_passes():
+    closes = [105.0, 104.0, 103.0, 102.0, 101.0, 100.0]
+    vols = [1e6] * 5 + [2e6]
+    assert _status(run(PLAYBOOK, fake_snapshot(make_bars(closes, vols))), "V04") == RuleStatus.PASS
+
+
+def test_v07_downtrend_earnings_drop_and_expand_vetoes():
+    prior = [130.0 - 0.4 * i for i in range(29)]
+    bars = make_bars(prior + [prior[-1] * 0.96], [1e6] * 29 + [2e6])
+    snap = fake_snapshot(bars, next_earnings=_weekdays_after(bars.last.d, 2))
+    results = run(PLAYBOOK, snap)
+    r = next(x for x in results if x.rule_id == "V07")
+    assert r.status == RuleStatus.VETO
+    assert r.review
+    assert "请确认无明显利空消息" in r.evidence
+
+
+def test_v07_no_earnings_is_unavailable():
+    prior = [130.0 - 0.4 * i for i in range(29)]
+    snap = fake_snapshot(make_bars(prior + [prior[-1] * 0.96], [1e6] * 29 + [2e6]))
+    assert _status(run(PLAYBOOK, snap), "V07") == RuleStatus.UNAVAILABLE
+
+
+def test_v07_uptrend_passes():
+    prior = [100.0 + i for i in range(29)]
+    bars = make_bars(prior + [prior[-1] * 0.96], [1e6] * 29 + [2e6])
+    snap = fake_snapshot(bars, next_earnings=_weekdays_after(bars.last.d, 2))
+    assert _status(run(PLAYBOOK, snap), "V07") == RuleStatus.PASS
+
+
+def test_v10_otc_vetoes():
+    snap = fake_snapshot(
+        make_bars(PRIOR_20 + [105.0]),
+        fundamental=Fundamental(1e11, "PNK", None),
+    )
+    assert _status(run(PLAYBOOK, snap), "V10") == RuleStatus.VETO
+
+
+def test_v10_small_cap_on_nyse_warns():
+    snap = fake_snapshot(
+        make_bars(PRIOR_20 + [105.0]),
+        fundamental=Fundamental(3e9, "NYQ", None),
+    )
+    assert _status(run(PLAYBOOK, snap), "V10") == RuleStatus.WARN
+
+
+def test_v10_large_cap_on_nasdaq_is_manual():
+    snap = fake_snapshot(
+        make_bars(PRIOR_20 + [105.0]),
+        fundamental=Fundamental(1e11, "NMS", None),
+    )
+    assert _status(run(PLAYBOOK, snap), "V10") == RuleStatus.MANUAL
+
+
+def test_v10_missing_fundamental_is_unavailable():
+    assert _status(run(PLAYBOOK, SNAP), "V10") == RuleStatus.UNAVAILABLE
+
+
+def test_v15_rsi6_above_90_vetoes():
+    snap = fake_snapshot(make_bars([100.0 + i for i in range(30)]))
+    assert _status(run(PLAYBOOK, snap), "V15") == RuleStatus.VETO
+
+
+def test_v15_rsi6_not_overbought_passes():
+    snap = fake_snapshot(make_bars([130.0 - i for i in range(30)]))
+    assert _status(run(PLAYBOOK, snap), "V15") == RuleStatus.PASS

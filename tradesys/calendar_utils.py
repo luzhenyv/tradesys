@@ -70,6 +70,17 @@ def is_opex_friday(d: date) -> bool:
     return d.weekday() == 4 and 15 <= d.day <= 21
 
 
+def weekdays_between(start: date, end: date) -> int:
+    """(start, end] 之间的工作日数。同一天为 0；end 早于 start 为负数。"""
+    if end < start:
+        return -weekdays_between(end, start)
+    n, d = 0, start + timedelta(days=1)
+    while d <= end:
+        n += d.weekday() < 5
+        d += timedelta(days=1)
+    return n
+
+
 def make_snapshot(bars: Bars, as_of: datetime, **inputs) -> Snapshot:
     """把 as_of 统一为 UTC 并解析为 session_date，截取 bars，组装 Snapshot。inputs 为其余字段。"""
     utc_as_of = to_utc(as_of)

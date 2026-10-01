@@ -14,6 +14,7 @@ from tradesys.calendar_utils import (
     session_date,
     to_et,
     to_utc,
+    weekdays_between,
 )
 from tradesys.serialize import from_json, to_json
 
@@ -82,6 +83,14 @@ def test_parse_as_of_with_z_suffix():
 def test_parse_as_of_invalid_tz_raises_value_error():
     with pytest.raises(ValueError, match="未知时区"):
         parse_as_of("2026-09-30T17:00", tz="Invalid/Zone_Name")
+
+
+def test_weekdays_between_counts_open_interval():
+    friday, monday, tuesday = date(2026, 1, 9), date(2026, 1, 12), date(2026, 1, 13)
+    assert weekdays_between(friday, friday) == 0
+    assert weekdays_between(friday, monday) == 1
+    assert weekdays_between(friday, tuesday) == 2
+    assert weekdays_between(monday, friday) == -1
 
 
 def test_session_date_with_shanghai_user_time():

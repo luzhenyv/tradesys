@@ -1,6 +1,6 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：① 已完成；② 起未开始。
+> 状态：①② 已完成；③ 起未开始。
 > 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
@@ -18,16 +18,16 @@
 - 测试：转换函数用手工 DataFrame（含 EP189 TSLA 经期权链算出 Band68）；两个真实取数测试标记 `network`，默认跳过，`uv run pytest -m network` 运行。
 - 行情缓存：暂不需要（单次约 3 秒）。
 
-## ② 只需行情的规则
+## ② 只需行情的规则 ✅（2026-10-02）
 
-| 规则 | 需要的新工具 |
+| 规则 | 工具 |
 | --- | --- |
-| V04 缩量反弹 | `close_up`、`volume_ma5_turning_down` |
-| V07 财报前放量下跌 | `trend`（P-TREND，simple）、`days_to_earnings`、`drop_pct` |
-| V10 OTC / 市值 | `on_main_exchange`、`market_cap_below`（warn 块） |
+| V04 缩量反弹 | `close_up`、`volume_state`、`volume_declining`、`volume_ma5_turning_down`（两个 veto 块 = OR） |
+| V07 财报前放量下跌 | `trend`（P-TREND，simple）、`days_to_earnings`、`drop_pct`、`volume_state` |
+| V10 OTC / 市值 | `exchange_not_in`（veto）、`market_cap_below`（warn）、社群热度 manual 块 |
 | V15 RSI-6 > 90 | `rsi_above` |
 
-V10 的社群热度部分写成 manual 块。
+主板白名单写在 V10 rule 块：NYQ/NYS/NMS/NGM/NCM/NAS/ASE/PCX。缺 fundamental / 财报日 → UNAVAILABLE。不改执行器。
 
 ## ③ 结构（YAML）
 

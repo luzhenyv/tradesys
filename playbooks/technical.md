@@ -227,6 +227,20 @@ when:
 - **Output**：VETO
 - **Automation**：auto
 - **Source**：EP301§R04 · Voice 核对 ✔
+```rule
+kind: veto
+when:
+  - close_up: {n: 1}                 # 收盘价高于前一日 · source
+  - volume_state: {state: shrink}
+```
+
+```rule
+kind: veto
+when:
+  - close_up: {n: 5}                 # 近 5 日收盘整体上行 · source
+  - volume_declining: {n: 5}         # 成交量逐日萎缩 · source
+  - volume_ma5_turning_down: {}
+```
 - **Status**：confirmed
 
 ### V05 止损无法确定或超出承受力
@@ -276,6 +290,14 @@ ask: T-1 日该股跌幅是否位列所属板块成分股前 10%？（V1 不做�
 - **Output**：VETO。"无明显利空消息"一项无法计算，evidence 中提示人工确认。
 - **Automation**：partial
 - **Source**：EP301§R07 · Voice 核对 ✔（"财报就是明天后天……突然间开始异常下跌，而且还放量了"）。`min_drop_pct` 为默认值，待校准。
+```rule
+kind: veto
+when:
+  - trend: {direction: down}              # P-TREND simple · 默认实现
+  - days_to_earnings: {max: 2}            # v07.earnings_window_days · 默认值
+  - drop_pct: {min: 0.03}                 # v07.min_drop_pct · 默认值，待实盘校准
+  - volume_state: {state: expand}
+```
 - **Status**：confirmed
 
 ### V08 刚被打止损
@@ -316,6 +338,22 @@ ask: 你是否长期跟踪过该公司基本面？若只是因为跌幅大而觉
   - `Fundamental` 缺失 → UNAVAILABLE
 - **Automation**：partial
 - **Source**：EP301§R10、EP302 · Voice 核对 ✔（"100亿以内的相对来讲都缺乏一些稳定性"）
+```rule
+kind: veto
+when:
+  - exchange_not_in: {codes: [NYQ, NYS, NMS, NGM, NCM, NAS, ASE, PCX]}  # 主板 · 已裁决
+```
+
+```rule
+kind: warn
+when:
+  - market_cap_below: {usd: 5000000000}  # universe.min_market_cap · source 50 亿
+```
+
+```rule
+kind: manual
+ask: 大跌后社群热度是否异常？（V1 不做社群数据，请自查）
+```
 - **Status**：confirmed
 
 ## 3.2 上涨过程（V11–V16）
@@ -397,6 +435,11 @@ when:
 - **Output**：VETO
 - **Automation**：auto
 - **Source**：EP301§R15 · Voice 核对 ✔
+```rule
+kind: veto
+when:
+  - rsi_above: {period: 6, x: 90}    # v15.rsi_fast_max · source
+```
 - **Status**：confirmed
 
 ### V16 RSI 超买区顶背离
@@ -583,4 +626,4 @@ Advice 只提醒，不影响结论。
 ## 后续工作
 
 - 实盘校准 rule 块中注释为"默认值"的参数，校准后改为"已裁决"。
-- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加 rule 块：V01、V05、V06、V08、V09、V11、V14、S08。
+- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加 rule 块：V01、V04、V05、V06、V07、V08、V09、V10、V11、V14、V15、S08。

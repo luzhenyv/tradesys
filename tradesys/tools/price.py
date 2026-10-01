@@ -25,3 +25,20 @@ def new_high(snap: Snapshot, n: int) -> Check:
     """P-NEWHIGH：T 日收盘价高于前 n 日所有收盘价。"""
     hit, k = extreme(snap.bars.closes, n, low=False)
     return Check(hit, (f"close={snap.bars.last.close}", f"收盘价为 {k} 日新高", f"n={n}"))
+
+
+def close_up(snap: Snapshot, n: int) -> Check:
+    """T 日收盘价是否高于 T−n 日收盘价。"""
+    c = snap.bars.closes
+    if len(c) < n + 1:
+        return Check(None, (f"历史不足 {n + 1} 根",), missing=True)
+    return Check(c[-1] > c[-1 - n], (f"close={c[-1]}", f"close[T-{n}]={c[-1 - n]}"))
+
+
+def drop_pct(snap: Snapshot, min: float) -> Check:
+    """T 日收盘跌幅是否达到 min（close[T]/close[T-1]−1 ≤ −min）。"""
+    c = snap.bars.closes
+    if len(c) < 2:
+        return Check(None, ("历史不足 2 根",), missing=True)
+    ret = c[-1] / c[-2] - 1
+    return Check(ret <= -min, (f"close={c[-1]}", f"prev={c[-2]}", f"涨跌={ret:.1%}"))

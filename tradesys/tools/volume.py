@@ -33,3 +33,22 @@ def volume_state(
     if actual == "expand" and is_opex_friday(snap.session_date):
         evidence.append("OpEx 放量，有效性打折")
     return Check(actual == state, tuple(evidence))
+
+
+def volume_declining(snap: Snapshot, n: int) -> Check:
+    """最近 n 日成交量是否严格逐日下降。"""
+    v = snap.bars.volumes
+    if len(v) < n:
+        return Check(None, (f"历史不足 {n} 根",), missing=True)
+    window = v[-n:]
+    hit = all(window[i] < window[i - 1] for i in range(1, n))
+    return Check(hit, (f"vol={tuple(round(x) for x in window)}",))
+
+
+def volume_ma5_turning_down(snap: Snapshot) -> Check:
+    """含当日的量能 MA5 是否拐头向下（MA5vol[T] < MA5vol[T-1]）。"""
+    v = snap.bars.volumes
+    if len(v) < 6:
+        return Check(None, ("历史不足 6 根",), missing=True)
+    ma_t, ma_prev = sum(v[-5:]) / 5, sum(v[-6:-1]) / 5
+    return Check(ma_t < ma_prev, (f"MA5vol={ma_t:.0f}", f"MA5vol[T-1]={ma_prev:.0f}"))
