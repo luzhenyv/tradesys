@@ -21,20 +21,33 @@ def _ev(r: RuleResult) -> str:
     return "；".join(r.evidence) if r.evidence else ""
 
 
-def _ctx(results: tuple[RuleResult, ...], status: RuleStatus) -> list[RuleResult]:
-    return [r for r in results if r.status == status and r.candidate_id is None]
+def _setup_trust(out: RunOutput, setup_id: str) -> str:
+    for r in out.results:
+        if r.rule_id == setup_id and r.candidate_id is None:
+            return r.trust
+    return "decide"
 
 
-def survivors(out: RunOutput) -> list[Candidate]:
-    killed = {r.candidate_id for r in out.results if r.status == RuleStatus.VETO and r.candidate_id}
-    return [c for c in out.candidates if c.id not in killed]
+def survivors(out: RunOutput, trust: str = "decide") -> list[Candidate]:
+    """trust=decide 的买点，且没被 decide 候选否决杀掉。"""
+    killed = {
+        r.candidate_id
+        for r in out.results
+        if r.status == RuleStatus.VETO and r.candidate_id and r.trust == "decide"
+    }
+    return [
+        c for c in out.candidates if _setup_trust(out, c.setup_id) == trust and c.id not in killed
+    ]
 
 
 def conclusion(out: RunOutput) -> str:
-    """上下文 VETO → 不买；否则有存活候选 → 买（long）；否则不买。MANUAL 不改写结论。"""
-    if _ctx(out.results, RuleStatus.VETO):
+    """只看 trust=decide：上下文 VETO → 不买；否则有存活买点 → 买（long）；否则不买。"""
+    if any(
+        r.status == RuleStatus.VETO and r.candidate_id is None and r.trust == "decide"
+        for r in out.results
+    ):
         return "不买"
-    if survivors(out):
+    if survivors(out, "decide"):
         return "买（long）"
     return "不买"
 
@@ -43,7 +56,7 @@ def _call(out: RunOutput) -> list[str]:
     """报告头：买或不买，买则带上第一存活买点的价格。"""
     if conclusion(out) != "买（long）":
         return ["**不买**"]
-    c = survivors(out)[0]
+    c = survivors(out, "decide")[0]
     rr = f"{c.rr:.2f}" if c.rr is not None else "—"
     stop = c.stop if c.stop is not None else "—"
     tgt = c.target if c.target is not None else "—"
@@ -117,42 +130,60 @@ def render(out: RunOutput, playbook: str | Path | None = None) -> str:
         f"收盘 {close} · as_of {snap.as_of.isoformat()}",
         "",
     ]
-    for title, status in (
-        ("VETO", RuleStatus.VETO),
-        ("WARN", RuleStatus.WARN),
-        ("人工检查", None),
-    ):
-        if status is None:
-            rows = [
-                r for r in out.results if r.status in (RuleStatus.MANUAL, RuleStatus.UNAVAILABLE)
-            ]
-        else:
-            rows = [r for r in out.results if r.status == status]
-        if not rows:
-            continue
-        parts += [f"## {title}", ""]
-        for r in rows:
-            who = f" · {r.candidate_id}" if r.candidate_id else ""
-            ev = f" — {_ev(r)}" if r.evidence else ""
-            parts.append(f"- **{r.rule_id} {r.title}**{who}{ev}")
-        parts.append("")
-    if out.candidates:
-        parts += ["## 候选买点", ""]
-        for c in out.candidates:
-            parts += _cand_block(c, out.results) + [""]
-    parts += ["## 提醒", ""]
-    parts += [f"- {x}" for x in _advice(snap)]
+
+    def line(r: RuleResult) -> str:
+        who = f" · {r.candidate_id}" if r.candidate_id else ""
+        ev = f" — {_ev(r)}" if r.evidence else ""
+        return f"- **{r.rule_id} {r.title}**{who}{ev}"
+
+    decide_hits = [
+        r
+        for r in out.results
+        if r.trust == "decide"
+        and r.status in (RuleStatus.VETO, RuleStatus.WARN)
+        and r.candidate_id is None
+    ]
+    decide_cands = survivors(out, "decide")
+    parts += ["## 判定", ""]
+    if decide_hits or decide_cands:
+        for r in decide_hits:
+            parts.append(line(r))
+        for c in decide_cands:
+            parts += _cand_block(c, out.results)
+    else:
+        parts.append("成熟规则未给出买点。")
     parts.append("")
-    reviewed = [r for r in out.results if r.review]
-    if reviewed:
-        ids = ", ".join(dict.fromkeys(r.rule_id for r in reviewed))
-        parts += ["## 近似算法（需复核）", "", ids, ""]
+
+    review_hits = [
+        r
+        for r in out.results
+        if r.trust == "review" and r.status in (RuleStatus.VETO, RuleStatus.WARN)
+    ]
+    review_cands = [c for c in out.candidates if _setup_trust(out, c.setup_id) == "review"]
+    if review_hits or review_cands:
+        parts += ["## 参考（近似，不计入结论）", ""]
+        for r in review_hits:
+            parts.append(line(r))
+        for c in review_cands:
+            parts += _cand_block(c, out.results)
+        parts.append("")
+
+    memos = [r for r in out.results if r.status in (RuleStatus.MANUAL, RuleStatus.UNAVAILABLE)]
+    undone: list[str] = []
     if playbook:
         undone = [
             r.id
             for r in parse(Path(playbook).read_text(encoding="utf-8"))
             if not r.blocks and r.id[:1] in "VS" and r.id[1:2].isdigit()
         ]
-        if undone:
-            parts += ["## 未实现", "", ", ".join(undone), ""]
+    if memos or undone:
+        parts += ["## 备忘", ""]
+        for r in memos:
+            parts.append(line(r))
+        for uid in undone:
+            parts.append(f"- **{uid}** 尚未实现")
+        parts.append("")
+    parts += ["## 提醒", ""]
+    parts += [f"- {x}" for x in _advice(snap)]
+    parts.append("")
     return "\n".join(parts).rstrip() + "\n"

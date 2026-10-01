@@ -234,6 +234,7 @@ when:
 
 ```rule
 kind: veto
+trust: review
 when:
   - fib_broken: {level: 0.618, days: 2}   # P-FIB simple · 近 60 日
 ```
@@ -487,6 +488,7 @@ when:
 - **Source**：EP301§R16 · Voice 核对 ✔
 ```rule
 kind: veto
+trust: review
 when:
   - rsi_above: {period: 6, x: 80}        # v16.rsi_overbought · source
   - divergence: {kind: top, max_gap: 30, k: 2}
@@ -623,6 +625,7 @@ target: {nearest_resistance: {}}
 - **Source**：EP302§B5 · Voice 核对 ✔（"第一次下跌收跌，它就回踩到了最近的一条MA……连续几个阴跌跌下来，慢慢摸到均线，无效"）。`min_streak` 为默认值。
 ```rule
 kind: setup
+trust: review
 when:
   - up_streak: {n: 5}                 # s05.min_streak · 默认值
   - first_down: {}
@@ -634,6 +637,7 @@ target: {nearest_resistance: {}}
 
 ```rule
 kind: setup
+trust: review
 when:
   - up_streak: {n: 5}
   - first_down: {}
@@ -655,6 +659,7 @@ target: {nearest_resistance: {}}
 - **Source**：EP302§B6 · Voice 核对 ✔
 ```rule
 kind: setup
+trust: review
 when:
   - trend: {direction: down}
   - volume_dry: {ratio: 0.6, offset: 1}          # s06.dry_ratio · 默认值
@@ -667,6 +672,7 @@ target: {nearest_resistance: {}}
 
 ```rule
 kind: setup
+trust: review
 when:
   - trend: {direction: sideways}
   - volume_dry: {ratio: 0.6, offset: 1}
@@ -690,6 +696,7 @@ target: {nearest_resistance: {}}
 - **Source**：EP302§B7、EP124 · Voice 核对 ✔
 ```rule
 kind: setup
+trust: review
 when:
   - trend: {direction: down}
   - new_low: {n: 20, offset: 1}
@@ -727,6 +734,7 @@ ask: 今日所属板块指数是否突破？该股是否为放量实体大阳突
 - **Source**：EP302§B9 · Voice 核对 ✔（发现口误）
 ```rule
 kind: setup
+trust: review
 when:
   - fib_holds: {level: 0.618}
   - rsi_below_within: {period: 6, x: 20, days: 30}

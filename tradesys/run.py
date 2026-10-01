@@ -55,6 +55,14 @@ def check_all(when: list[dict], snap: Snapshot, candidate: Candidate | None) -> 
     return Check(True, evidence, review, grade=grade)
 
 
+def block_trust(block: dict) -> str:
+    if block.get("trust"):
+        return str(block["trust"])
+    if block.get("kind") == "manual":
+        return "memo"
+    return "decide"
+
+
 def _field(spec: dict | None, snap: Snapshot) -> Check:
     if not spec:
         return Check(True)
@@ -73,7 +81,8 @@ def evaluate_setup(rule: Rule, snap: Snapshot) -> tuple[RuleResult, Candidate | 
         evidence, review = c.evidence, review or c.review
         if c.hit is None:
             status = RuleStatus.UNAVAILABLE if c.missing else RuleStatus.MANUAL
-            return RuleResult(rule.id, rule.title, status, evidence, review=review), None
+            rr = RuleResult(rule.id, rule.title, status, evidence, review=review, trust="memo")
+            return rr, None
         if not c.hit:
             continue
         entry, stop, target = (_field(block.get(k), snap) for k in ("entry", "stop", "target"))
@@ -81,14 +90,18 @@ def evaluate_setup(rule: Rule, snap: Snapshot) -> tuple[RuleResult, Candidate | 
         evidence = evidence + entry.evidence + stop.evidence + target.evidence
         if entry.hit is None or entry.value is None:
             status = RuleStatus.UNAVAILABLE if entry.missing else RuleStatus.MANUAL
-            return RuleResult(rule.id, rule.title, status, evidence, review=review), None
+            rr = RuleResult(rule.id, rule.title, status, evidence, review=review, trust="memo")
+            return rr, None
         grade = next(
             (g for g in (c.grade, entry.grade, stop.grade, target.grade) if g),
             "B" if review else "A",
         )
         cand = Candidate(rule.id, rule.id, entry.value, stop.value, target.value, grade, evidence)
         quotes = (f"entry={entry.value}", f"stop={stop.value}", f"target={target.value}")
-        rr = RuleResult(rule.id, rule.title, RuleStatus.PASS, quotes + evidence, review=review)
+        trust = block_trust(block)
+        rr = RuleResult(
+            rule.id, rule.title, RuleStatus.PASS, quotes + evidence, review=review, trust=trust
+        )
         return rr, cand
     return RuleResult(rule.id, rule.title, RuleStatus.PASS, evidence, review=review), None
 
@@ -99,16 +112,26 @@ def evaluate(rule: Rule, snap: Snapshot, candidate: Candidate | None = None) -> 
     review = False
     for block in rule.blocks:
         if block["kind"] == "manual":
-            return RuleResult(rule.id, rule.title, RuleStatus.MANUAL, (block["ask"],), cid)
+            return RuleResult(
+                rule.id, rule.title, RuleStatus.MANUAL, (block["ask"],), cid, trust="memo"
+            )
         if block["kind"] == "setup":
             continue
         c = check_all(block["when"], snap, candidate)
         evidence, review = c.evidence, review or c.review
         if c.hit is None:
             status = RuleStatus.UNAVAILABLE if c.missing else RuleStatus.MANUAL
-            return RuleResult(rule.id, rule.title, status, evidence, cid, review)
+            return RuleResult(rule.id, rule.title, status, evidence, cid, review, "memo")
         if c.hit:
-            return RuleResult(rule.id, rule.title, STATUS[block["kind"]], evidence, cid, review)
+            return RuleResult(
+                rule.id,
+                rule.title,
+                STATUS[block["kind"]],
+                evidence,
+                cid,
+                review,
+                block_trust(block),
+            )
     return RuleResult(rule.id, rule.title, RuleStatus.PASS, evidence, cid, review)
 
 

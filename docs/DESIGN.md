@@ -60,6 +60,7 @@ when:                   # 列表中全部工具 hit=True 才命中（只有 AND�
 - **没有 OR、没有表达式语言。** 需要 OR 就拆成两个 rule 块，或写成一个工具。
 - **阈值写在 rule 块里**，就在规则原文旁边。不另设配置文件。
 - **没有 rule 块的规则** = 尚未实现，执行器跳过。
+- **`trust`**（可选）：`decide`（默认，计入买/不买）/ `review`（已实现但近似，只进参考）/ `memo`（`kind: manual` 的默认；缺数据的 MANUAL/UNAVAILABLE 也当 memo）。报告结论只看 `decide`。
 - **`kind: setup`**（产生 Candidate）。`when` 与 veto 相同（AND）。命中后用工具取价：
 
 ```yaml

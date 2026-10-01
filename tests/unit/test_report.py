@@ -20,7 +20,7 @@ def test_context_veto_is_do_not_buy():
     assert conclusion(out) == "不买"
     md = render(out, PLAYBOOK)
     assert "**不买**" in md
-    assert "## VETO" in md
+    assert "## 判定" in md
 
 
 def test_manual_checklist_does_not_block_do_not_buy():
@@ -28,19 +28,39 @@ def test_manual_checklist_does_not_block_do_not_buy():
     assert conclusion(out) == "不买"
     md = render(out, PLAYBOOK)
     assert "**不买**" in md
-    assert "## 人工检查" in md
+    assert "## 备忘" in md
     assert "请在 YAML 中标注结构" in md
+    assert "成熟规则未给出买点" in md
 
 
-def test_report_lists_setup_candidate():
+def test_simple_setup_is_reference_not_buy():
     closes = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 104.0]
     snap = fake_snapshot(make_bars(closes, lows=[*closes[:-1], 103.0]))
+    out = run(PLAYBOOK, snap)
+    assert conclusion(out) == "不买"
+    md = render(out, PLAYBOOK)
+    assert "**不买**" in md
+    assert "## 参考（近似，不计入结论）" in md
+    assert "S05" in md
+
+
+def test_yaml_setup_is_buy():
+    from tradesys.models import Zone
+
+    z = Zone("z-100-120", "resistance", 100.0, 120.0)
+    n = 12
+    closes = [110.0] * n + [125.0, 108.0]
+    vols = [1e6] * n + [2e6, 3e6]
+    opens = [110.0] * n + [125.0, 105.0]
+    snap = fake_snapshot(
+        make_bars(closes, vols, opens=opens, highs=closes, lows=opens),
+        zones=(z,),
+    )
     out = run(PLAYBOOK, snap)
     assert conclusion(out) == "买（long）"
     md = render(out, PLAYBOOK)
     assert "**买（long）**" in md
-    assert "S05" in md
-    assert "entry 104.0" in md
+    assert "S01" in md
 
 
 def test_report_warn_and_advice_and_band68():
@@ -55,7 +75,6 @@ def test_report_warn_and_advice_and_band68():
     assert "美东 9:30–10:00 不下单" in md
     assert "距财报" in md
     assert "Band68=" in md
-    assert "近似算法" in md
 
 
 def test_cli_report_from_snapshot():

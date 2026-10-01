@@ -168,6 +168,7 @@ class RuleResult:
     evidence: tuple[str, ...] = ()
     candidate_id: str | None = None
     review: bool = False
+    trust: str = "decide"  # decide | review | memo；报告用，执行器原样搬运
 
 
 @dataclass(frozen=True)
