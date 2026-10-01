@@ -1,7 +1,7 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：①②③④ 已完成；⑤ 未开始。
-> 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report` 输出完整的交易备忘录。
+> 状态：①–⑤ 已完成。
+> 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report playbooks/technical.md` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
@@ -54,11 +54,11 @@
 - `check_all`：`hit=None` 优先于 False（缺结构时不因另一工具 False 而变成 PASS）。
 - 包约 1826 行（超 1500；YAML 绑定工具所致）。
 
-## ⑤ 报告
+## ⑤ 报告 ✅（2026-10-02）
 
-- `tradesys/report.py` 的 `render(results, snap)` → Markdown，按 DESIGN §3 的结论规则输出。
-- 包含：结论、VETO / WARN、人工检查清单、候选买点、提醒（A-*、Band68）、未实现与 simple 规则清单。
-- CLI 新增 `tradesys report`。
+- `render(out)` → Markdown。结论：上下文 VETO → 不买；否则 MANUAL/UNAVAILABLE → 待人工确认；有存活候选 → 可买；否则今日无买点。候选 VETO 只否决该买点。
+- 章节：结论、VETO、WARN、人工检查、候选买点、提醒（固定盘前盘后/开盘半小时、财报、Band68 与结构、流星线）、近似算法、未实现（仅 V/S 无 rule 块）。
+- `RunOutput.snapshot` 随 run 输出，故 `fetch | run | report PLAYBOOK` 可串联。`report PLAYBOOK` 也可直接读 Snapshot。
 
 ## 不在 Phase 1
 

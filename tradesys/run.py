@@ -131,4 +131,4 @@ def run(playbook: str | Path, snap: Snapshot, candidates: tuple[Candidate, ...] 
             results += [evaluate(rule, snap, c) for c in all_cands]
         else:
             results.append(evaluate(rule, snap))
-    return RunOutput(tuple(results), all_cands)
+    return RunOutput(tuple(results), all_cands, snap)

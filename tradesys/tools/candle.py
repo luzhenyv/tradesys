@@ -9,7 +9,7 @@ def _body(b: Bar) -> float:
 
 
 def _span(b: Bar) -> float:
-    return b.high - b.low or 1e-9
+    return b.high - b.low
 
 
 def hammer(snap: Snapshot, n: int = 20, short_shadow_ratio: float = 0.1) -> Check:
@@ -17,6 +17,8 @@ def hammer(snap: Snapshot, n: int = 20, short_shadow_ratio: float = 0.1) -> Chec
     if not snap.bars.items:
         return Check(None, ("无K线",), missing=True, review=True)
     b = snap.bars.last
+    if _span(b) <= 0 or _body(b) <= 0:
+        return Check(False, ("非锤子线",), review=True)
     body, lower = _body(b), min(b.open, b.close) - b.low
     upper = b.high - max(b.open, b.close)
     if lower < 2 * body or upper > short_shadow_ratio * _span(b):
@@ -66,6 +68,8 @@ def shooting_star(snap: Snapshot, short_shadow_ratio: float = 0.1) -> Check:
     if not snap.bars.items:
         return Check(None, ("无K线",), missing=True, review=True)
     b = snap.bars.last
+    if _span(b) <= 0 or _body(b) <= 0:
+        return Check(False, ("非流星线",), review=True)
     body, upper = _body(b), b.high - max(b.open, b.close)
     lower = min(b.open, b.close) - b.low
     hit = upper >= 2 * body and lower <= short_shadow_ratio * _span(b)

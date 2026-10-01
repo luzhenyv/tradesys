@@ -3,6 +3,7 @@
 Snapshot 从 stdin 读入，结果以 JSON 写到 stdout，可用管道串联，也可被 agent 直接调用。
 """
 
+import json
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -11,7 +12,8 @@ import typer
 import yaml
 
 from tradesys.calendar_utils import parse_as_of
-from tradesys.models import Candidate, Snapshot
+from tradesys.models import Candidate, RunOutput, Snapshot
+from tradesys.report import render
 from tradesys.run import run as run_playbook
 from tradesys.serialize import from_json, from_plain, to_json
 from tradesys.tools import TOOLS, call
@@ -83,6 +85,19 @@ def tool(
 def run(playbook: Path, candidates: Candidates = None) -> None:
     """运行整份 playbook：stdin 读 Snapshot JSON，stdout 输出 RunOutput JSON。"""
     typer.echo(to_json(run_playbook(playbook, _snapshot(), _candidates(candidates))))
+
+
+@app.command()
+def report(playbook: Path) -> None:
+    """Markdown 备忘录。stdin 为 Snapshot JSON 或 RunOutput JSON。"""
+    data = json.loads(sys.stdin.read())
+    if isinstance(data, dict) and "results" in data:
+        out = from_plain(RunOutput, data)
+        if out.snapshot is None:
+            raise typer.BadParameter("RunOutput 无 snapshot，请把 Snapshot JSON 交给 report")
+    else:
+        out = run_playbook(playbook, from_plain(Snapshot, data))
+    typer.echo(render(out, playbook))
 
 
 if __name__ == "__main__":

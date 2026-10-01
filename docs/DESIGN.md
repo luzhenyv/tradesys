@@ -99,11 +99,13 @@ target: {nearest_resistance: {}}     # 没有阻力则 value=None，仍产出
 
 ```bash
 tradesys fetch META > snap.json                     # 唯一 I/O
-tradesys run playbooks/technical.md < snap.json     # → RuleResult JSON
-tradesys report < results.json                      # → Markdown（Phase 1）
+tradesys run playbooks/technical.md < snap.json     # → RunOutput JSON（含 snapshot）
+tradesys report playbooks/technical.md < snap.json  # 或接 RunOutput / Snapshot
 tradesys tool new_low --arg n=20 < snap.json        # 单独运行任一工具
 tradesys tools                                      # 列出工具
 ```
+
+管道：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report playbooks/technical.md`。`report` 也可直接读 Snapshot（内部先 run）。
 
 将来：agent 读 playbook 原文，用同一组 CLI 命令调用工具、组合判断；也可把 `fetch / run / report` 写成 skill。不需要改工具和 playbook。
 

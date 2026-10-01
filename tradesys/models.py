@@ -172,7 +172,8 @@ class RuleResult:
 
 @dataclass(frozen=True)
 class RunOutput:
-    """一次 playbook 运行：规则结果 + 由 setup 产生（及 CLI 注入）的候选买点。"""
+    """一次 playbook 运行：规则结果 + 候选买点；snapshot 供 report 使用。"""
 
     results: tuple[RuleResult, ...]
     candidates: tuple[Candidate, ...] = ()
+    snapshot: Snapshot | None = None
