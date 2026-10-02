@@ -1,13 +1,13 @@
 """当前极性下，候选买点与最近支撑 / 阻力的距离 · EP301§R12、§R13。"""
 
 from tradesys.models import Candidate, Check, Snapshot
-from tradesys.tools.structure import ASK, current_role
+from tradesys.tools.structure import current_role, no_structure
 
 
 def far_from_support(snap: Snapshot, candidate: Candidate, pct: float) -> Check:
     """entry 距下方最近当前支撑上沿是否超过 pct；无支撑则为悬空。"""
     if not snap.zones:
-        return Check(None, (ASK,))
+        return no_structure(snap, "zone")
     below = [
         z for z in snap.zones if current_role(z, snap.bars) == "support" and z.low < candidate.entry
     ]
@@ -24,7 +24,7 @@ def far_from_support(snap: Snapshot, candidate: Candidate, pct: float) -> Check:
 def tight_to_resistance(snap: Snapshot, candidate: Candidate, pct: float) -> Check:
     """entry 距上方最近当前阻力下沿是否不足 pct。"""
     if not snap.zones:
-        return Check(None, (ASK,))
+        return no_structure(snap, "zone")
     above = [
         z
         for z in snap.zones

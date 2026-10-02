@@ -87,3 +87,46 @@ def test_fetch_past_as_of_has_no_present_only_data():
     snap = fetch_snapshot("META", datetime(2026, 9, 1, 17, 0, tzinfo=ET))
     assert snap.session_date == date(2026, 9, 1)
     assert (snap.fundamental, snap.next_earnings, snap.chain) == (None, None, None)
+
+
+class _FakeTicker:
+    """只实现 fetch_snapshot 用到的 yfinance 接口。"""
+
+    def __init__(self, ticker):
+        self.info = {"marketCap": 1e12, "exchange": "NMS", "sector": "Tech"}
+        self.calendar = {"Earnings Date": [date(2026, 10, 28)]}
+        self.options = ("2026-10-16",)
+
+    def history(self, start, end, auto_adjust):
+        return _history(
+            [("2026-10-01", 100, 101, 99, 100, 1e6), ("2026-10-02", 100, 103, 99, 102, 1e6)]
+        )
+
+    def option_chain(self, expiry):
+        calls = pd.DataFrame({"strike": [102.0], "bid": [0.0], "ask": [3.0]})
+        puts = pd.DataFrame({"strike": [102.0], "bid": [0.0], "ask": [3.0]})
+        return type("OC", (), {"calls": calls, "puts": puts})()
+
+
+def test_band68_fetched_at_0100_et_next_day(monkeypatch):
+    # review #8：上海 13:00 = 美东 01:00，新交易时段尚未开盘，期权报价仍是 10-02 收盘后的
+    import tradesys.adapters.yahoo as yahoo
+
+    monkeypatch.setattr(yahoo.yf, "Ticker", _FakeTicker)
+    monkeypatch.setattr(yahoo, "attach_structures", lambda s: s)
+    now = datetime(2026, 10, 3, 1, 0, tzinfo=ET)
+    snap = fetch_snapshot("X", now, now=now)
+    assert snap.session_date == date(2026, 10, 2)
+    assert snap.chain is not None and snap.chain.expiry == date(2026, 10, 16)
+    assert band68_range(snap).evidence[0] == "Band68=[96.0, 108.0]"
+
+
+def test_no_chain_once_next_session_opened(monkeypatch):
+    import tradesys.adapters.yahoo as yahoo
+
+    monkeypatch.setattr(yahoo.yf, "Ticker", _FakeTicker)
+    monkeypatch.setattr(yahoo, "attach_structures", lambda s: s)
+    now = datetime(2026, 10, 5, 9, 45, tzinfo=ET)  # 周一开盘后，as_of 取周一盘中
+    snap = fetch_snapshot("X", now, now=now)
+    assert snap.session_date == date(2026, 10, 2)
+    assert snap.chain is None

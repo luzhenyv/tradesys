@@ -10,6 +10,13 @@ BreakState = Literal["intact", "false_break", "broken", "reclaimed"]
 ASK = "请在 YAML 中标注结构"
 
 
+def no_structure(snap: Snapshot, kind: str) -> Check:
+    """缺少 kind 结构：人已在 absent 中确认不存在 → False（不适用）；否则 None（请标注）。"""
+    if kind in snap.absent:
+        return Check(False, (f"已确认无 {kind}，不适用",))
+    return Check(None, (f"{ASK}（{kind}），或在 absent 中声明不存在",))
+
+
 def break_verdict(zone: Zone, bars: Bars) -> tuple[BreakState, date | None]:
     """逐日回放 bars，返回最后一日的 (状态, 发生日)。
 
@@ -92,7 +99,7 @@ def _vol_tag(bars: Bars, on: date | None) -> tuple[str, ...]:
 def zone_broken_within(snap: Snapshot, kind: str, days: int) -> Check:
     """原始 kind 的 Zone 是否在最近 days 根内 broken 且未收复。"""
     if not snap.zones:
-        return Check(None, (ASK,))
+        return no_structure(snap, "zone")
     evidence: list[str] = []
     hit = False
     for z in snap.zones:
@@ -107,8 +114,8 @@ def zone_broken_within(snap: Snapshot, kind: str, days: int) -> Check:
 
 def line_broken_within(snap: Snapshot, kind: str, days: int, side: str) -> Check:
     """给定 kind 的 Line 是否在最近 days 根内收盘穿越 side。"""
-    if not snap.lines:
-        return Check(False, ("YAML 中无 Line",))
+    if not any(ln.kind == kind for ln in snap.lines):
+        return no_structure(snap, kind)
     evidence: list[str] = []
     hit = False
     for line in snap.lines:

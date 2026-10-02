@@ -1,4 +1,4 @@
-"""工具注册表（DESIGN §4）。playbook 的 rule 块按名字引用这里的工具。
+"""工具注册表（DESIGN §5）。playbook 的 rule 块按名字引用这里的工具。
 
 约定：tool(snap, **args) -> Check；scope: candidate 的工具为 tool(snap, candidate, **args)。
 candidate 规则里可以组合不接收 candidate 的工具（只看 Snapshot）。
@@ -6,7 +6,7 @@ candidate 规则里可以组合不接收 candidate 的工具（只看 Snapshot�
 
 import inspect
 
-from tradesys.tools.band68 import band68_range
+from tradesys.tools.band68 import band68_edge, band68_range
 from tradesys.tools.candle import (
     bullish_engulfing,
     green_expand,
@@ -80,6 +80,7 @@ TOOLS = {
     "stop_wider_than": stop_wider_than,
     "rr_below": rr_below,
     "band68_range": band68_range,
+    "band68_edge": band68_edge,
 }
 
 

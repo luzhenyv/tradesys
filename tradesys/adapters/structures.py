@@ -1,6 +1,7 @@
-"""人工确认的结构：data/structures/<TICKER>.yaml → Zone / Line。
+"""人工确认的结构：data/structures/<TICKER>.yaml → Zone / Line / absent。
 
 只加载 confirmed_at ≤ session_date、且 status 不是 proposed 的条目。
+absent 列出人已确认不存在的结构 kind（zone / trendline / neckline / flag），相关规则判为不适用。
 strength / note / source 等多余键忽略，供人阅读与将来提案器用。
 """
 
@@ -32,11 +33,11 @@ def _skip(raw: dict, session_date: date) -> bool:
 
 def load(
     ticker: str, session_date: date, root: Path = DEFAULT_ROOT
-) -> tuple[tuple[Zone, ...], tuple[Line, ...]]:
+) -> tuple[tuple[Zone, ...], tuple[Line, ...], tuple[str, ...]]:
     """读 YAML；文件不存在时返回空。"""
     path = Path(root) / f"{ticker}.yaml"
     if not path.is_file():
-        return (), ()
+        return (), (), ()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     zones, lines = [], []
     for raw in data.get("zones") or []:
@@ -50,4 +51,5 @@ def load(
         lines.append(
             Line(str(raw["id"]), raw["kind"], (_as_date(d1), float(v1)), (_as_date(d2), float(v2)))
         )
-    return tuple(zones), tuple(lines)
+    absent = (str(raw["kind"]) for raw in data.get("absent") or [] if not _skip(raw, session_date))
+    return tuple(zones), tuple(lines), tuple(absent)

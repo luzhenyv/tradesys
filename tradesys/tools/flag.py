@@ -1,90 +1,69 @@
-"""上升旗形（YAML A/B 线）· EP150。旗杆切分是近似，review=True。"""
+"""上升旗形 · EP150。旗杆 flag_pole 与 A/B 线 flag_upper / flag_lower 均由人在 YAML 中画出。"""
 
-from datetime import date
-
-from tradesys.models import Check, Line, Snapshot
+from tradesys.models import Bar, Check, Line, Snapshot
 from tradesys.tools.fib import retrace
-from tradesys.tools.structure import ASK
+from tradesys.tools.structure import no_structure
 from tradesys.tools.volume import state_at
 
 
-def _pair(snap: Snapshot) -> tuple[Line, Line] | None:
-    up = [ln for ln in snap.lines if ln.kind == "flag_upper"]
-    lo = [ln for ln in snap.lines if ln.kind == "flag_lower"]
-    if not up or not lo:
+def _flag(snap: Snapshot) -> tuple[Line, Line, Line] | None:
+    """(A 线, B 线, 旗杆)；任一缺失返回 None。旗杆 p1 = 杆底，p2 = 杆顶。"""
+    found = [[ln for ln in snap.lines if ln.kind == k] for k in ("flag_upper", "flag_lower")]
+    pole = [ln for ln in snap.lines if ln.kind == "flag_pole"]
+    if not all(found) or not pole:
         return None
-    return up[0], lo[0]
+    return found[0][0], found[1][0], pole[0]
 
 
-def _start(a: Line, b: Line) -> date:
-    return min(a.p1[0], a.p2[0], b.p1[0], b.p2[0])
+def _avg(bars: tuple[Bar, ...]) -> float:
+    return sum(x.volume for x in bars) / len(bars)
 
 
-def _windows(snap: Snapshot) -> tuple[tuple, tuple, tuple] | None:
-    pair = _pair(snap)
-    if pair is None:
-        return None
-    a, b = pair
-    start = _start(a, b)
-    pole = tuple(x for x in snap.bars.items if x.d < start)
-    flag = tuple(x for x in snap.bars.items[:-1] if x.d >= start)
-    return pole, flag, pair
-
-
-def flag_break(snap: Snapshot) -> Check:
-    """旗杆放量、旗面缩量且守住 61.8%、T 收盘越过 A 线。"""
-    win = _windows(snap)
-    if win is None:
-        return Check(None, (ASK,), review=True)
-    pole, flag, (a, _) = win
-    if len(pole) < 25 or len(flag) < 2:
-        return Check(False, ("旗杆或旗面过短",), review=True)
-    before, pole = pole[:20], pole[20:]
-    if len(pole) < 5:
-        return Check(False, ("旗杆过短",), review=True)
-    pole_vol = sum(x.volume for x in pole) / len(pole)
-    flag_vol = sum(x.volume for x in flag) / len(flag)
-    pre_vol = sum(x.volume for x in before) / len(before)
-    if pole_vol <= pre_vol or flag_vol >= pole_vol:
-        return Check(False, ("量能不符合旗形",), review=True)
-    dates = [x.d for x in snap.bars.items]
+def flag_break(snap: Snapshot, pre: int) -> Check:
+    """旗杆均量高于杆底前 pre 根、旗面缩量且守住旗杆 61.8%、T 收盘越过 A 线。"""
+    flag = _flag(snap)
+    if flag is None:
+        return no_structure(snap, "flag")
+    a, _, p = flag
+    items = snap.bars.items
+    (d0, low), (d1, high) = p.p1, p.p2
+    before = tuple(x for x in items if x.d < d0)[-pre:]
+    pole = tuple(x for x in items if d0 <= x.d <= d1)
+    body = tuple(x for x in items[:-1] if x.d > d1)
+    if len(before) < pre:
+        return Check(None, (f"旗杆前不足 {pre} 根",), missing=True)
+    if len(pole) < 2 or len(body) < 2:
+        return Check(False, ("旗杆或旗面过短",))
+    if _avg(pole) <= _avg(before) or _avg(body) >= _avg(pole):
+        return Check(False, ("量能不符合旗形",))
     reds = 0
-    for b in flag:
-        vols = tuple(x.volume for x in snap.bars.items[: dates.index(b.d) + 1])
-        if b.close < b.open and state_at(vols) == "expand":
-            reds += 1
-            if reds >= 2:
-                return Check(False, ("旗面持续放量大阴",), review=True)
-        else:
-            reds = 0
-    low, high = min(x.close for x in pole), max(x.close for x in pole)
-    if min(x.close for x in flag) < retrace(low, high, 0.618):
-        return Check(False, ("旗面跌破旗杆 61.8%",), review=True)
+    for i, b in enumerate(items[:-1]):
+        red = b in body and b.close < b.open and state_at(snap.bars.volumes[: i + 1]) == "expand"
+        reds = reds + 1 if red else 0
+        if reds >= 2:
+            return Check(False, ("旗面持续放量大阴",))
+    if min(x.close for x in body) < retrace(low, high, 0.618):
+        return Check(False, ("旗面跌破旗杆 61.8%",))
     last, at = snap.bars.last, a.value_at(snap.session_date)
     if last.close <= at:
-        return Check(False, (f"收盘未过 A 线 {at:.2f}",), review=True)
+        return Check(False, (f"收盘未过 A 线 {at:.2f}",))
     t2 = last.close + (high - low)
-    return Check(True, (f"A={at:.2f}", f"pole_high={high}", f"T2={t2:.2f}"), review=True)
+    return Check(True, (f"A={at:.2f}", f"pole={low}→{high}", f"T2={t2:.2f}"))
 
 
 def buffered_flag_lower(snap: Snapshot, pct: float) -> Check:
     """B(T) × (1−pct)。"""
-    pair = _pair(snap)
-    if pair is None:
-        return Check(None, (ASK,), review=True)
-    _, b = pair
-    v = b.value_at(snap.session_date) * (1 - pct)
-    return Check(True, (f"stop={v}",), review=True, value=v)
+    flag = _flag(snap)
+    if flag is None:
+        return no_structure(snap, "flag")
+    v = flag[1].value_at(snap.session_date) * (1 - pct)
+    return Check(True, (f"stop={v}",), value=v)
 
 
 def flag_pole_high(snap: Snapshot) -> Check:
-    """旗杆最高收盘（T1）。"""
-    win = _windows(snap)
-    if win is None:
-        return Check(None, (ASK,), review=True)
-    pre, _, _ = win
-    pole = pre[20:] if len(pre) >= 25 else pre
-    if not pole:
-        return Check(True, ("无旗杆",), review=True, value=None)
-    v = max(x.close for x in pole)
-    return Check(True, (f"T1={v}",), review=True, value=v)
+    """旗杆顶（T1），取 YAML 中 flag_pole 的 p2。"""
+    flag = _flag(snap)
+    if flag is None:
+        return no_structure(snap, "flag")
+    v = flag[2].p2[1]
+    return Check(True, (f"T1={v}",), value=v)

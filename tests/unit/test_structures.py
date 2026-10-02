@@ -33,24 +33,29 @@ lines:
     kind: trendline
     points: [[2026-01-02, 10], [2026-01-10, 12]]
     confirmed_at: 2026-01-15
+absent:
+  - {kind: flag, confirmed_at: 2026-01-01}
+  - {kind: neckline, confirmed_at: 2026-06-01}
 """
 
 
 def test_load_filters_future_proposed_and_keeps_extra_keys(tmp_path):
     (tmp_path / "X.yaml").write_text(SAMPLE, encoding="utf-8")
-    zones, lines = load("X", date(2026, 3, 1), root=tmp_path)
+    zones, lines, absent = load("X", date(2026, 3, 1), root=tmp_path)
+    assert absent == ("flag",)
     assert zones == (Zone("old", "support", 1.0, 2.0),)
     assert lines == (Line("t1", "trendline", (date(2026, 1, 2), 10.0), (date(2026, 1, 10), 12.0)),)
 
 
 def test_load_missing_file_is_empty(tmp_path):
-    assert load("NOPE", date(2026, 1, 1), root=tmp_path) == ((), ())
+    assert load("NOPE", date(2026, 1, 1), root=tmp_path) == ((), (), ())
 
 
 def test_amd_example_yaml_respects_confirmed_at():
-    zones, lines = load("AMD", date(2026, 10, 2))
+    zones, lines, absent = load("AMD", date(2026, 10, 2))
     assert len(zones) == 5 and len(lines) == 1
-    assert load("AMD", date(2026, 8, 1)) == ((), ())
+    assert set(absent) == {"flag", "neckline"}
+    assert load("AMD", date(2026, 8, 1)) == ((), (), ())
 
 
 def test_attach_structures_tags_none_without_yaml():

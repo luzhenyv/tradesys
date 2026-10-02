@@ -27,7 +27,7 @@ def hammer(snap: Snapshot, n: int = 20, short_shadow_ratio: float = 0.1) -> Chec
     return Check(True, ("锤子线",), review=True, grade="C" if is_nl else None)
 
 
-def bullish_engulfing(snap: Snapshot, tier: int = 1, short_shadow_ratio: float = 0.1) -> Check:
+def bullish_engulfing(snap: Snapshot, short_shadow_ratio: float = 0.1) -> Check:
     """一级：T 开盘 < T-1 low 且收盘 > T-1 high；上影不超过 short_shadow_ratio。"""
     if len(snap.bars.items) < 2:
         return Check(None, ("历史不足 2 根",), missing=True, review=True)
@@ -35,7 +35,7 @@ def bullish_engulfing(snap: Snapshot, tier: int = 1, short_shadow_ratio: float =
     if a.close >= a.open or b.close <= b.open:
         return Check(False, ("非阳包阴",), review=True)
     full = b.open < a.low and b.close > a.high
-    if tier >= 1 and not full:
+    if not full:
         return Check(False, ("非一级吞没",), review=True)
     if b.high - b.close > short_shadow_ratio * _span(b):
         return Check(False, ("上影过长",), review=True)

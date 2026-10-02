@@ -50,20 +50,15 @@ def impulse_high(snap: Snapshot, window: int = 60) -> Check:
 
 
 def fib_broken(snap: Snapshot, level: float = 0.618, days: int = 2, window: int = 60) -> Check:
-    """收盘刚跌破 Fib level 且未收回。"""
-    imp = impulse(snap.bars.closes, window)
+    """收盘在最近 days 根内跌破 Fib level 且未收回。上涨段取破位窗口之前，破位日新低不改写结构。"""
+    c = snap.bars.closes
+    imp = impulse(c[:-days], window) if len(c) > days else None
     if imp is None:
         return Check(None, ("历史不足",), missing=True, review=True)
     low, high = imp
     if high <= low:
         return Check(False, ("无上涨结构",), review=True)
     line = retrace(low, high, level)
-    c = snap.bars.closes
-    hit = False
-    start = max(1, len(c) - days)
-    for i in range(start, len(c)):
-        if c[i] < line <= c[i - 1]:
-            hit = True
-    if c[-1] >= line:
-        hit = False
+    broke = any(c[i] < line <= c[i - 1] for i in range(max(1, len(c) - days), len(c)))
+    hit = broke and c[-1] < line
     return Check(hit, (f"fib{level}={line:.2f}", f"close={c[-1]}"), review=True)

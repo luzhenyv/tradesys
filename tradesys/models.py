@@ -88,7 +88,7 @@ class Zone:
 @dataclass(frozen=True)
 class Line:
     id: str
-    kind: Literal["trendline", "neckline", "flag_upper", "flag_lower"]
+    kind: Literal["trendline", "neckline", "flag_upper", "flag_lower", "flag_pole"]
     p1: tuple[date, float]
     p2: tuple[date, float]
 
@@ -114,6 +114,7 @@ class Snapshot:
     bars: Bars
     zones: tuple[Zone, ...] = ()
     lines: tuple[Line, ...] = ()
+    absent: tuple[str, ...] = ()  # 人已确认不存在的结构：zone / trendline / neckline / flag
     fundamental: Fundamental | None = None
     next_earnings: date | None = None
     chain: Chain | None = None
@@ -169,6 +170,7 @@ class RuleResult:
     candidate_id: str | None = None
     review: bool = False
     trust: str = "decide"  # decide | review | memo；报告用，执行器原样搬运
+    kind: str = ""  # 决定结果的块：veto | warn | setup | manual | todo | advice
 
 
 @dataclass(frozen=True)

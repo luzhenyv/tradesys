@@ -1,6 +1,8 @@
 """P-BAND68 · EP189：ATM straddle 推算 68% 波动区间。"""
 
 from tradesys.models import Chain, Check, Snapshot
+from tradesys.tools.fib import impulse, retrace
+from tradesys.tools.structure import current_role
 
 
 def band68(close: float, chain: Chain, max_strike_gap_pct: float) -> tuple[float, float] | None:
@@ -30,3 +32,27 @@ def band68_range(snap: Snapshot, max_strike_gap_pct: float = 0.02) -> Check:
         return Check(None, ("最近行权价偏离收盘价过大",), missing=True)
     low, high = band
     return Check(True, (f"Band68=[{low:.1f}, {high:.1f}]", f"expiry={snap.chain.expiry}"))
+
+
+def band68_edge(
+    snap: Snapshot, against: str, max_strike_gap_pct: float, level: float = 0.618
+) -> Check:
+    """P-BAND68 · EP189：下沿低于最近支撑 / Fib（support|fib），或上沿超出最近阻力。"""
+    base = band68_range(snap, max_strike_gap_pct)
+    if not base.hit:
+        return base
+    low, high = band68(snap.bars.last.close, snap.chain, max_strike_gap_pct)
+    if against == "fib":
+        imp = impulse(snap.bars.closes)
+        if imp is None or imp[1] <= imp[0]:
+            return Check(False, (*base.evidence, "无上涨结构"))
+        fib = retrace(*imp, level)
+        return Check(low < fib, (*base.evidence, f"Fib {level}={fib:.1f}"))
+    zones = [z for z in snap.zones if current_role(z, snap.bars) == against]
+    if not zones:
+        return Check(False, (*base.evidence, f"无当前 {against}"))
+    if against == "support":
+        z = max(zones, key=lambda z: z.high)
+        return Check(low < z.high, (*base.evidence, f"{z.id} {z.low}-{z.high}"))
+    z = min(zones, key=lambda z: z.low)
+    return Check(high > z.low, (*base.evidence, f"{z.id} {z.low}-{z.high}"))

@@ -97,7 +97,7 @@ def report(playbook: Path) -> None:
             raise typer.BadParameter("RunOutput 无 snapshot，请把 Snapshot JSON 交给 report")
     else:
         out = run_playbook(playbook, from_plain(Snapshot, data))
-    typer.echo(render(out, playbook))
+    typer.echo(render(out))
 
 
 if __name__ == "__main__":

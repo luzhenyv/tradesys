@@ -3,6 +3,7 @@
 EP301 的案例全部通过真实 playbook（playbooks/technical.md）运行。
 """
 
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -112,13 +113,83 @@ def test_changing_playbook_threshold_changes_result(tmp_path):
         assert _status(run(path, snap), "X01") == expected
 
 
+BLOCKS = """
+### X02 未知后仍可命中
+```rule
+kind: veto
+when:
+  - days_to_earnings: {max: 5}
+```
+
+```rule
+kind: warn
+when:
+  - new_low: {n: 3}
+```
+
+### X03 只有未知
+```rule
+kind: veto
+when:
+  - days_to_earnings: {max: 5}
+```
+
+```rule
+kind: warn
+when:
+  - new_high: {n: 3}
+```
+
+### X04 提醒
+```rule
+kind: advice
+say: 固定提醒
+```
+
+### X05 占位
+```rule
+kind: todo
+ask: 待实现
+```
+"""
+
+
+def test_unknown_block_does_not_stop_later_blocks(tmp_path):
+    path = tmp_path / "p.md"
+    path.write_text(BLOCKS, encoding="utf-8")
+    snap = fake_snapshot(make_bars([100.0, 101.0, 102.0, 99.0]))  # 无财报日；3 日新低
+    rows = {r.rule_id: r for r in run(path, snap).results}
+    assert rows["X02"].status == RuleStatus.WARN
+    assert rows["X03"].status == RuleStatus.UNAVAILABLE
+    assert rows["X03"].trust == "decide"
+    assert rows["X03"].evidence == ("缺少财报日期",)
+    assert (rows["X04"].status, rows["X04"].trust, rows["X04"].evidence) == (
+        RuleStatus.WARN,
+        "memo",
+        ("固定提醒",),
+    )
+    assert (rows["X05"].status, rows["X05"].kind) == (RuleStatus.MANUAL, "todo")
+
+
+def test_v07_uptrend_without_earnings_is_pass():
+    # Kleene：趋势向上已可判定 False，缺财报日不改变结论（review #6）
+    prior = [100.0 + i for i in range(29)]
+    snap = fake_snapshot(make_bars(prior + [prior[-1] * 0.96], [1e6] * 29 + [2e6]))
+    assert _status(run(PLAYBOOK, snap), "V07") == RuleStatus.PASS
+
+
+def test_duplicate_candidate_id_is_rejected():
+    with pytest.raises(ValueError, match="候选 id 重复"):
+        run(PLAYBOOK, SNAP, (_cand(109, 100, cid="x"), _cand(108, 100, cid="x")))
+
+
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
     rules = {r.id: r for r in parse(PLAYBOOK.read_text(encoding="utf-8"))}
     assert len(rules["S01"].blocks) == 2
     assert len(rules["V02"].blocks) == 1
     assert len(rules["V03"].blocks) == 3
     assert len(rules["V04"].blocks) == 2
-    assert len(rules["V10"].blocks) == 3
+    assert len(rules["V10"].blocks) == 2
     assert len(rules["V14"].blocks) == 2
     assert len(rules["V16"].blocks) == 1
     assert len(rules["S05"].blocks) == 2
@@ -192,12 +263,22 @@ def test_v10_small_cap_on_nyse_warns():
     assert _status(run(PLAYBOOK, snap), "V10") == RuleStatus.WARN
 
 
-def test_v10_large_cap_on_nasdaq_is_manual():
+def test_v10_large_cap_on_nasdaq_passes():
     snap = fake_snapshot(
         make_bars(PRIOR_20 + [105.0]),
         fundamental=Fundamental(1e11, "NMS", None),
     )
-    assert _status(run(PLAYBOOK, snap), "V10") == RuleStatus.MANUAL
+    assert _status(run(PLAYBOOK, snap), "V10") == RuleStatus.PASS
+
+
+def test_v10b_social_heat_asked_even_when_small_cap_warns():
+    snap = fake_snapshot(
+        make_bars(PRIOR_20 + [105.0]),
+        fundamental=Fundamental(3e9, "NYQ", None),
+    )
+    out = run(PLAYBOOK, snap)
+    assert _status(out, "V10") == RuleStatus.WARN
+    assert _status(out, "V10b") == RuleStatus.MANUAL
 
 
 def test_v10_missing_fundamental_is_unavailable():
@@ -241,11 +322,6 @@ def test_v03_uptrend_close_below_vetoes():
     line = Line("up", "trendline", (days[0], 90.0), (days[4], 94.0))
     snap = fake_snapshot(make_bars([100.0] * 8 + [70.0, 70.0]), lines=(line,))
     assert _status(run(PLAYBOOK, snap), "V03") == RuleStatus.VETO
-
-
-def test_v03_no_lines_falls_through_to_fib():
-    # SNAP 未跌破 60 日 Fib → PASS（无线不再短路成 MANUAL）
-    assert _status(run(PLAYBOOK, SNAP), "V03") == RuleStatus.PASS
 
 
 def test_v12_entry_far_from_support_vetoes():
@@ -401,27 +477,59 @@ def test_s04_neckline_retest_emits_candidate():
     assert c.stop == pytest.approx(100.0 * 0.99)
 
 
-def test_s03_flag_break_emits_candidate():
-    days = trading_days(date(2026, 1, 5), 40)
-    # 前 20 日低量，后 10 日旗杆放量上涨，再 9 日旗面，T 突破 A
-    a = Line("A", "flag_upper", (days[30], 120.0), (days[39], 114.0))
-    b = Line("B", "flag_lower", (days[30], 108.0), (days[39], 102.0))
-    closes = [80.0] * 20 + [80.0 + 4 * i for i in range(10)] + [118.0] * 9 + [116.0]
-    # pole last = 80+36=116? range(10)=0..9 → 80..116. Flag 118s then T 116 — T must close > A(T)
-    # A at last day: from 120 to 114 over 9 calendar steps... use days[30] to days[39]
-    vols = [5e5] * 20 + [2e6] * 10 + [6e5] * 9 + [2e6]
-    opens = closes[:-1] + [114.0]  # T 阳线
-    highs = closes[:-1] + [116.0]
+def _flag_snap(history: int):
+    """history 根平静期 → 10 根放量旗杆 → 9 根缩量旗面 → T 放量阳线越过 A 线。"""
+    n = history + 20
+    days = trading_days(date(2025, 1, 6), n)
+    pole = Line("P", "flag_pole", (days[history], 80.0), (days[history + 9], 116.0))
+    a = Line("A", "flag_upper", (days[history + 10], 120.0), (days[n - 1], 114.0))
+    b = Line("B", "flag_lower", (days[history + 10], 108.0), (days[n - 1], 102.0))
+    # 平静期前段高价，使「全年最低到全年最高」与人画旗杆不同
+    calm = [150.0] * (history - 20) + [80.0] * 20
+    closes = calm + [80.0 + 4 * i for i in range(10)] + [110.0] * 9 + [116.0]
+    vols = [5e5] * history + [2e6] * 10 + [6e5] * 9 + [2e6]
+    opens = closes[:-1] + [111.0]  # T 阳线
     snap = fake_snapshot(
-        make_bars(closes, vols, opens=opens, highs=highs, lows=opens),
-        lines=(a, b),
+        make_bars(closes, vols, start=days[0], opens=opens, highs=closes, lows=opens),
+        lines=(pole, a, b),
     )
-    at = a.value_at(snap.session_date)
-    # 确保 T 收盘高于 A
-    assert closes[-1] > at
-    out = run(PLAYBOOK, snap)
+    assert closes[-1] > a.value_at(snap.session_date)
+    return snap
+
+
+def test_s03_flag_break_emits_candidate():
+    out = run(PLAYBOOK, _flag_snap(20))
     (c,) = [x for x in out.candidates if x.setup_id == "S03"]
-    assert c.target == 80.0 + 4 * 9  # pole high 116
+    assert c.target == 116.0  # 人画旗杆顶
+    assert c.stop == pytest.approx(102.0 * 0.99)
+
+
+def test_s03_pole_from_yaml_on_400_bar_history():
+    # review #3：yfinance 取 400 日历天 ≈ 250 根；旗杆不得退化为「全年」
+    out = run(PLAYBOOK, _flag_snap(230))
+    (c,) = [x for x in out.candidates if x.setup_id == "S03"]
+    assert c.target == 116.0
+    assert _status(out, "S03") == RuleStatus.PASS
+
+
+def test_s03_without_pole_is_manual_and_absent_flag_is_not_applicable():
+    snap = _flag_snap(20)
+    no_pole = replace(snap, lines=tuple(ln for ln in snap.lines if ln.kind != "flag_pole"))
+    assert _status(run(PLAYBOOK, no_pole), "S03") == RuleStatus.MANUAL
+    declared = replace(no_pole, absent=("flag",))
+    out = run(PLAYBOOK, declared)
+    assert _status(out, "S03") == RuleStatus.PASS
+    assert not any(c.setup_id == "S03" for c in out.candidates)
+
+
+def test_v03_no_lines_is_manual():
+    # review #5：无趋势线 / 颈线且未声明不存在 → 不可判定，不能静默落到 Fib 得 PASS
+    assert _status(run(PLAYBOOK, SNAP), "V03") == RuleStatus.MANUAL
+
+
+def test_v03_absent_lines_falls_through_to_fib():
+    snap = replace(SNAP, absent=("trendline", "neckline"))
+    assert _status(run(PLAYBOOK, snap), "V03") == RuleStatus.PASS
 
 
 def test_s09_without_pattern_passes():

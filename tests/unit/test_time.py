@@ -8,13 +8,15 @@ import pytest
 from tradesys.adapters.fake import fake_snapshot, make_bars
 from tradesys.calendar_utils import (
     ET,
+    is_monthly_opex,
     make_snapshot,
     now_utc,
     parse_as_of,
     session_date,
+    session_open_since,
     to_et,
     to_utc,
-    weekdays_between,
+    trading_days_between,
 )
 from tradesys.serialize import from_json, to_json
 
@@ -85,12 +87,34 @@ def test_parse_as_of_invalid_tz_raises_value_error():
         parse_as_of("2026-09-30T17:00", tz="Invalid/Zone_Name")
 
 
-def test_weekdays_between_counts_open_interval():
+def test_trading_days_between_counts_open_interval():
     friday, monday, tuesday = date(2026, 1, 9), date(2026, 1, 12), date(2026, 1, 13)
-    assert weekdays_between(friday, friday) == 0
-    assert weekdays_between(friday, monday) == 1
-    assert weekdays_between(friday, tuesday) == 2
-    assert weekdays_between(monday, friday) == -1
+    assert trading_days_between(friday, friday) == 0
+    assert trading_days_between(friday, monday) == 1
+    assert trading_days_between(friday, tuesday) == 2
+    assert trading_days_between(monday, friday) == -1
+
+
+def test_trading_days_between_skips_holidays():
+    # 2026-07-03（7/4 周六补休）休市：周四 → 下周一只隔 1 个交易日
+    assert trading_days_between(date(2026, 7, 2), date(2026, 7, 6)) == 1
+
+
+def test_good_friday_opex_moves_to_thursday():
+    # 2025-04-18 是第三个周五也是 Good Friday，月度交割提前到 04-17
+    assert is_monthly_opex(date(2025, 4, 17))
+    assert not is_monthly_opex(date(2025, 4, 18))
+    assert is_monthly_opex(date(2026, 4, 17))
+    assert not is_monthly_opex(date(2026, 4, 16))
+
+
+def test_session_open_since_crosses_weekend_and_holiday():
+    fri = date(2026, 10, 2)
+    assert not session_open_since(fri, datetime(2026, 10, 3, 1, 0, tzinfo=ET))
+    assert not session_open_since(fri, datetime(2026, 10, 5, 9, 29, tzinfo=ET))
+    assert session_open_since(fri, datetime(2026, 10, 5, 9, 30, tzinfo=ET))
+    # 2026-09-04 周五 → 09-07 劳动节休市 → 09-08 才开盘
+    assert not session_open_since(date(2026, 9, 4), datetime(2026, 9, 7, 12, 0, tzinfo=ET))
 
 
 def test_session_date_with_shanghai_user_time():

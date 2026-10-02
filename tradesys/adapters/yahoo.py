@@ -2,7 +2,8 @@
 
 as_of 约束：日线可以回溯；基本面、财报日、期权链只有"现在"的数据，
 因此只在 as_of 为今天时获取，否则留空（依赖它们的规则得到 UNAVAILABLE）。
-期权链还要求 as_of 已收盘，使 Band68 的收盘价与期权报价属于同一交易日。
+期权链还要求 session_date 收盘后尚无新的常规时段开盘，使 Band68 的收盘价与期权报价属于同一交易日
+（如上海 13:00 = 美东 01:00 仍可取前一日收盘后的报价）。
 pandas 只在本文件内出现，立即转换为 dataclass。
 """
 
@@ -12,7 +13,13 @@ from datetime import date, datetime, timedelta
 import yfinance as yf
 
 from tradesys.adapters.structures import load as load_structures
-from tradesys.calendar_utils import is_opex_friday, make_snapshot, now_utc, to_et
+from tradesys.calendar_utils import (
+    is_monthly_opex,
+    make_snapshot,
+    now_utc,
+    session_open_since,
+    to_et,
+)
 from tradesys.models import Bar, Bars, Chain, Fundamental, OptionQuote, Snapshot
 
 HISTORY_DAYS = 400
@@ -42,7 +49,7 @@ def pick_expiry(expiries: tuple[str, ...], after: date, kind: str = "monthly") -
     """session_date 之后最近的到期日；monthly 只取每月第三个周五。"""
     days = [date.fromisoformat(e) for e in expiries]
     return min(
-        (d for d in days if d > after and (kind == "weekly" or is_opex_friday(d))), default=None
+        (d for d in days if d > after and (kind == "weekly" or is_monthly_opex(d))), default=None
     )
 
 
@@ -85,8 +92,10 @@ def fetch_snapshot(
     earnings = min(
         (d for d in (t.calendar or {}).get("Earnings Date", []) if d >= session), default=None
     )
-    chain, options = None, "options=none（未收盘）"
-    if session == local.date() and (exp := pick_expiry(t.options, session, expiry)):
+    chain, options = None, "options=none（已有新的交易时段）"
+    if not session_open_since(session, current) and (
+        exp := pick_expiry(t.options, session, expiry)
+    ):
         oc = t.option_chain(exp.isoformat())
         chain = chain_from_frames(
             ticker, exp, as_of, oc.calls, oc.puts, bars.upto(session).last.close
@@ -106,6 +115,6 @@ def fetch_snapshot(
 
 def attach_structures(snap: Snapshot) -> Snapshot:
     """把已确认且 as_of 可见的 YAML 结构挂到 Snapshot 上。"""
-    zones, lines = load_structures(snap.ticker, snap.session_date)
-    tag = "structures=yaml" if zones or lines else "structures=none"
-    return replace(snap, zones=zones, lines=lines, sources=(*snap.sources, tag))
+    zones, lines, absent = load_structures(snap.ticker, snap.session_date)
+    tag = "structures=yaml" if zones or lines or absent else "structures=none"
+    return replace(snap, zones=zones, lines=lines, absent=absent, sources=(*snap.sources, tag))

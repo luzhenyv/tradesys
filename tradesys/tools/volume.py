@@ -1,6 +1,6 @@
 """P-VOL · EP010、EP301§R04：同时与前一日、前 5 日均量（不含当日）比较。"""
 
-from tradesys.calendar_utils import at_offset, is_opex_friday
+from tradesys.calendar_utils import at_offset, is_monthly_opex
 from tradesys.models import Check, Snapshot
 
 
@@ -42,7 +42,7 @@ def volume_state(
     prev, ma5 = volume_ratios(snap.bars.volumes)
     actual = classify(prev, ma5, shrink_ratio, expand_ratio)
     evidence = [f"vs_prev={prev and round(prev, 2)}", f"vs_ma5={ma5 and round(ma5, 2)}", actual]
-    if actual == "expand" and is_opex_friday(snap.session_date):
+    if actual == "expand" and is_monthly_opex(snap.session_date):
         evidence.append("OpEx 放量，有效性打折")
     return Check(actual == state, tuple(evidence))
 

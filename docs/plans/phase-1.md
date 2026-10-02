@@ -1,6 +1,6 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：①–⑤ 已完成。
+> 状态：①–⑥ 已完成。
 > 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report playbooks/technical.md` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
@@ -51,14 +51,25 @@
 
 - S01–S04、S09。when 与 stop 共用查找函数（最近一次符合的 Zone/Line）。不写 `setups/s03.py`。
 - 无 YAML：S01–S04 → MANUAL。S09 用 Fib 61.8% 当支撑，不依赖 YAML。
-- `check_all`：`hit=None` 优先于 False（缺结构时不因另一工具 False 而变成 PASS）。
-- 包约 1826 行（超 1500；YAML 绑定工具所致）。
+- `check_all`：setup 块 `hit=None` 优先于 False（缺结构时不因另一工具 False 而变成 PASS）；veto / warn 改为 Kleene（见 ⑥）。
 
 ## ⑤ 报告 ✅（2026-10-02）
 
-- `render(out)` → Markdown。结论只看 `trust: decide`。simple 为 `review` 只进参考；manual/缺数据进备忘，都不改买/不买。
-- 章节：结论、VETO、WARN、人工检查、候选买点、提醒（固定盘前盘后/开盘半小时、财报、Band68 与结构、流星线）、近似算法、未实现（仅 V/S 无 rule 块）。
+- `render(out)` → Markdown。结论只看 `trust: decide`（⑥ 起「不知道等于不买」）。
+- 章节（⑥ 后，过渡形态）：结论 + 原因、判定（上下文 VETO/WARN + 每个 decide 候选的 存活 / 否决 / 待确认）、待确认（阻断买入）、未能评估的买点、参考（近似）、规则覆盖、提醒（来自 playbook 的 `kind: advice`）。
 - `RunOutput.snapshot` 随 run 输出，故 `fetch | run | report PLAYBOOK` 可串联。`report PLAYBOOK` 也可直接读 Snapshot。
+
+## ⑥ Review 修复 ✅（2026-10-02）
+
+依据 Phase 1 peer review：
+
+- **结论**：不知道等于不买。headline 为 `买（long）/ 不买 · 否决 / 不买 · 待确认 N 项 / 不买 · 无买点`；每个 decide 候选都列出并标注 存活 / 否决 / 待确认（review #1 #2）。
+- **执行器**：未知的块不终止判断（#5）；veto / warn 用 Kleene（#6）；未知结果保留块的 trust；新增 `kind: todo` / `kind: advice`；`RuleResult.kind`；注入候选 id 冲突报错。
+- **结构**：YAML `absent` 声明不存在的结构 → 不适用；S03 旗杆改为人画 `flag_pole`，去掉近似标记（#3）；`line_broken_within` 无线时诚实返回 None。
+- **报告**：trust 决定结论，review 只展示「⚠ 近似」（#4）；Advice 改为 playbook 中的 `kind: advice` 条目与 `band68_edge` 工具（#7）；去掉 V/S 前缀假设，以「规则覆盖」章节取代「备忘 / 未实现」。
+- **数据**：期权链条件改为「session_date 收盘后尚无新开盘」（#8）；NYSE 2025–2027 休市表、交易日计数、Good Friday OpEx。
+- **Low**：V10b 社群热度独立成条；`bullish_engulfing` 去掉无效的 tier；`fib_broken` 在破位窗口之前取上涨段；retest 公共骨架合并。
+- **预算**：DESIGN §9 有意上调为约 ≤ 2200 行（#9）。
 
 ## 不在 Phase 1
 
@@ -70,4 +81,4 @@
 - 对任意一只主板股票运行三段管道，得到完整的备忘录。
 - playbook 中 V01–V16、S01–S09 都有 rule 块，并有用原始案例写的测试。
 - `grep` 代码中不出现任何规则 ID。
-- 包规模在预算之内。
+- 包规模在预算之内（约 ≤ 2200 行，DESIGN §9）。

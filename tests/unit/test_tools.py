@@ -160,3 +160,11 @@ def test_listing_tools_hit_on_otc_and_small_cap():
     snap = fake_snapshot(make_bars([100.0] * 5), fundamental=Fundamental(1e9, "PNK", None))
     assert exchange_not_in(snap, codes=["NYQ", "NMS"]).hit
     assert market_cap_below(snap, usd=5e9).hit
+
+
+def test_fib_broken_counts_break_that_also_makes_new_low():
+    # review：破位当天同时创 60 日新低，旧实现把上涨段塌缩成「无上涨结构」而漏判
+    from tradesys.tools.fib import fib_broken
+
+    closes = [100.0 + 2 * i for i in range(26)] + [149.0, 90.0]  # 100→150，T 收 90
+    assert fib_broken(fake_snapshot(make_bars(closes))).hit is True

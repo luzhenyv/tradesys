@@ -13,6 +13,8 @@
 - **小工具，靠组合解决复杂任务。** 不为任何复杂任务写全能函数。
 - **编排者可替换。** 现在由执行器 / 脚本编排；将来交给 agent + skill，甚至 sub-agent。工具与 playbook 不随之改变。
 - **简单优先。** 不轻易增加复杂度；够用即可（§9）。
+- **不知道等于不买。** 已实现的判定规则无法判断时，不给出买入结论；复杂规则先人工或占位，报告如实列出（§3）。
+- **规则服务于实盘。** 不为某只股票硬找旗形、头肩顶；图上没有的结构由人声明不存在，相关规则即不适用（§6）。
 
 ## 2. 四层
 
@@ -31,23 +33,29 @@ tradesys/cli.py     薄壳：每个工具、执行器都能单独从命令行调
 
 | 对象 | 含义 |
 | --- | --- |
-| `Snapshot` | 某只股票在 as_of 时点的全部输入：bars（截至 session_date）、zones、lines、fundamental、next_earnings、chain、sources |
+| `Snapshot` | 某只股票在 as_of 时点的全部输入：bars（截至 session_date）、zones、lines、absent、fundamental、next_earnings、chain、sources |
 | `Candidate` | 候选买点：entry、stop、target、grade、evidence；`rr` 为计算属性 |
-| `Check` | 一个工具的输出：`hit`（True / False / None）、evidence、review、missing |
-| `RuleResult` | 一条规则的结果：rule_id、title、status、evidence、candidate_id、review |
+| `Check` | 一个工具的输出：`hit`（True / False / None）、evidence、review、missing；setup 取价用 `value`、形态等级用 `grade` |
+| `RuleResult` | 一条规则的结果：rule_id、title、status、evidence、candidate_id、review、`trust`（decide / review / memo）、`kind`（决定结果的块） |
 | `RunOutput` | 一次运行：`results` + `candidates`（setup 产出及 CLI 注入） |
 
 `RuleStatus`：`PASS / VETO / WARN / MANUAL / UNAVAILABLE`。
 - `WARN` 不阻断，由用户决定。
-- `MANUAL`（系统无法判断）与 `UNAVAILABLE`（缺数据）不等于 `PASS`，报告中列为人工检查清单，**不改写买/不买**。
-- 结论只输出 **买** 或 **不买**（本 playbook 不做空）：上下文 VETO → 不买；否则有候选未被候选 VETO 杀掉 → 买（long）；否则不买。
+- `MANUAL`（系统无法判断）与 `UNAVAILABLE`（缺数据）不等于 `PASS`。
+- 结论只看 `trust: decide`，只输出 **买** 或 **不买**（本 playbook 不做空），并给出原因：
+  - `不买 · 否决`：上下文 VETO，或全部候选被 VETO。
+  - `买（long）`：存在候选，上下文与该候选的全部 decide 规则都是 PASS / WARN。
+  - `不买 · 待确认 N 项`：存在候选，但有 decide 规则 MANUAL / UNAVAILABLE（**不知道等于不买**）。
+  - `不买 · 无买点`。
+- 不阻断的未知：`kind: manual` / `todo`（trust 为 memo，进人工清单）；setup 本身无法判断（只意味着可能错过买点）。
+- 报告（`tradesys/report.py`）是**过渡形态**：判定、待确认、未能评估的买点、参考（近似）、规则覆盖、提醒。章节随规则实现进度增减；报告只按 status / trust / kind 归类，不认识任何规则。
 
 ## 4. Playbook 与 rule 块
 
 一个 playbook 是一份 Markdown。每条规则是一个 `### ID 标题` 段落，自然语言写原文、来源、案例；可执行部分写在段内的 ```rule 块（YAML）：
 
 ```yaml
-kind: veto              # veto | warn | manual
+kind: veto              # veto | warn | manual | todo | advice | setup
 scope: candidate        # 可选：对每个候选买点运行一次
 when:                   # 列表中全部工具 hit=True 才命中（只有 AND）
   - new_high: {n: 20}           # 参数名 · 状态（已裁决 / source / 默认值）
@@ -55,12 +63,15 @@ when:                   # 列表中全部工具 hit=True 才命中（只有 AND�
 ```
 
 - **一段可以有多个 rule 块，按顺序判断，首个命中的块决定结果**（相当于 if / elif）。都不命中 → PASS。例：V14 先 `veto rr_below 1.0`，再 `warn rr_below 1.5`。
-- **任一工具返回 `hit=None`** → 停止判断，状态为 MANUAL（缺数据时为 UNAVAILABLE）。
-- **`kind: manual`** 只写 `ask: 提问`，不需要任何代码。
+- **块内 AND 采用 Kleene 逻辑**：任一工具 False → 块不命中；否则有工具 `hit=None` → 块未知。setup 块例外：有 None 即未知（缺结构时不静默跳过）。
+- **未知的块不终止判断**：记下后继续下一块；后面有块命中就用它，都不命中则为 MANUAL（缺数据时为 UNAVAILABLE），evidence 只含未知工具的证据。工具因此可以诚实地返回 None。
+- **`kind: manual`** 只写 `ask: 提问`，不需要任何代码，表示永久由人判断。**`kind: todo`** 写法相同，表示占位、将来要实现。
+- **`kind: advice`** 写 `say: 提醒文本`，`when` 可选（省略 = 总是提醒）。命中时进入报告「提醒」，不影响结论。
 - **没有 OR、没有表达式语言。** 需要 OR 就拆成两个 rule 块，或写成一个工具。
 - **阈值写在 rule 块里**，就在规则原文旁边。不另设配置文件。
 - **没有 rule 块的规则** = 尚未实现，执行器跳过。
-- **`trust`**（可选）：`decide`（默认，计入买/不买）/ `review`（已实现但近似，只进参考）/ `memo`（`kind: manual` 的默认；缺数据的 MANUAL/UNAVAILABLE 也当 memo）。报告结论只看 `decide`。
+- **`trust`**（可选）：`decide`（默认，计入买/不买）/ `review`（已实现但近似，只进参考）/ `memo`（manual / todo / advice 的默认）。未知结果保留其块的 trust，报告据此判断是否阻断。
+- **`trust` 与 `review` 的分工**：`trust` 是作者在 playbook 中的声明，**决定**是否计入结论；`Check.review` 是工具自报的近似算法标记，**只用于展示**（报告标「⚠ 近似」）。
 - **`kind: setup`**（产生 Candidate）。`when` 与 veto 相同（AND）。命中后用工具取价：
 
 ```yaml
@@ -79,10 +90,10 @@ target: {nearest_resistance: {}}     # 没有阻力则 value=None，仍产出
 
 ## 5. 工具
 
-- 签名：`tool(snap, **args) -> Check`；`scope: candidate` 的工具为 `tool(snap, candidate, **args)`。
+- 签名：`tool(snap, **args) -> Check`；`scope: candidate` 的工具为 `tool(snap, candidate, **args)`。阈值一律由 rule 块传入。
 - 纯函数：不做 I/O，不读全局状态。I/O 只在 adapters（取数）与 CLI。
 - 在 `tradesys/tools/__init__.py` 的 `TOOLS` 字典中注册；不做动态加载。
-- 每个文件约 ≤ 50 行。docstring 首行写它实现的原语 ID 与来源（如 `P-NEWLOW · EP301§R01`），`tradesys tools` 据此列出说明，供 agent 发现。
+- 每个函数约 ≤ 50 行。docstring 首行写它实现的原语 ID 与来源（如 `P-NEWLOW · EP301§R01`），`tradesys tools` 据此列出说明，供 agent 发现。
 - 可复用的计算（如 `extreme`、`volume_ratios`、`band68`、`break_verdict`）写成普通函数放在同一文件，工具只做一层包装。
 - **新增工具的门槛**：某条规则需要、且无法由已有工具组合得到。
 
@@ -91,8 +102,10 @@ target: {nearest_resistance: {}}     # 没有阻力则 value=None，仍产出
 - **统一使用 UTC 时间**：系统内部所有时点（`Snapshot.as_of`、`Chain.as_of`、序列化 JSON）一律使用带时区的 UTC 时间。`tradesys fetch` 提供 `--tz` / `--timezone`（默认 UTC）允许用户按当地时区（如 `Asia/Shanghai`、`Asia/Tokyo`）输入时点，在 CLI 边界转换为 UTC。
 - **盘后分析**：`as_of` 先转为美东时间（ET），解析为 `session_date` = 最近一个已收盘的常规交易日（`calendar_utils.make_snapshot`）；盘中 as_of 取前一交易日，永不使用未完成日线。
 - **收盘价是唯一真值**：破位、突破、新低、新高一律以常规时段收盘价判定（EP272）。
-- **as_of 无未来数据**：adapter 不得返回 as_of 之后才可获得的数据。yfinance 的基本面、财报日、期权链只有"现在"的值，所以只在 as_of 为今天时获取，否则为空 → `missing` → UNAVAILABLE；不得用今天的数据冒充过去。
-- **结构由人画**：支撑阻力区间、趋势线、颈线、旗形 A/B 线来自 `data/structures/<TICKER>.yaml`，机器只判定，不自动识别。`tradesys fetch` 按 `confirmed_at ≤ session_date` 载入；`status: proposed` 的条目不进入 Snapshot（手写省略 status = 已确认）。`strength` / `note` / `source` 等多余键忽略，供人阅读与将来「生成 + 复核」。无结构时相关规则 MANUAL，不是 UNAVAILABLE。
+- **as_of 无未来数据**：adapter 不得返回 as_of 之后才可获得的数据。yfinance 的基本面、财报日、期权链只有"现在"的值，所以只在 as_of 为今天时获取，否则为空 → `missing` → UNAVAILABLE；不得用今天的数据冒充过去。期权链另要求 session_date 收盘后尚无新的常规时段开盘（`session_open_since`），如美东 01:00 仍取前一日收盘后的报价。
+- **交易日历**：`calendar_utils.NYSE_HOLIDAYS` 列出 2025–2027 全日休市；交易日计数与月度 OpEx（休市则提前到周四）据此计算，需逐年补充。
+- **结构由人画**：支撑阻力区间、趋势线、颈线、旗形（旗杆 `flag_pole` + A/B 线 `flag_upper` / `flag_lower`）来自 `data/structures/<TICKER>.yaml`，机器只判定，不自动识别。
+- **结构由人声明不存在**：YAML 顶层 `absent: [{kind, confirmed_at}]`（kind 为 `zone / trendline / neckline / flag`），载入为 `Snapshot.absent`。缺少该结构时工具经 `no_structure()` 返回 False（不适用），而不是 None。`tradesys fetch` 按 `confirmed_at ≤ session_date` 载入；`status: proposed` 的条目不进入 Snapshot（手写省略 status = 已确认）。`strength` / `note` / `source` 等多余键忽略，供人阅读与将来「生成 + 复核」。无结构时相关规则 MANUAL，不是 UNAVAILABLE。
 
 ## 7. 编排
 
@@ -133,7 +146,7 @@ tradesys tools                                      # 列出工具
 ## 9. 简单的边界（MVP）
 
 - **实现等级**（playbook 中每条规则的 `Impl`）：`full` 完整实现；`simple` 近似算法，Check 带 `review=True`，报告标"⚠ 近似算法，需人工复核"；`stub` / `manual` 只写 ask，不写代码。
-- **规模**：`tradesys/` 包约 ≤ 1500 行，工具文件约 ≤ 50 行。超出时先简化或降级为 manual。
+- **规模**：`tradesys/` 包约 ≤ 2200 行，每个工具**函数**约 ≤ 50 行。超出时先简化或降级为 manual。（2026-10-02 由 1500 上调：YAML 结构绑定的工具、报告过渡章节与交易日历是有意的代价。）
 - **一个真实数据源**：yfinance（`adapters/yahoo.py`），外加测试用 fake。
 - **V1 范围**：美股主板个股、只做多、日线、盘后，输出 Markdown 备忘录。
 - **V1 不做**：自动下单、Web UI、插件机制、事件总线、数据库 ORM、RAG / 向量库、完整回测、分时系统、全板块扫描、止盈与持仓、做空与期权策略、任何 agent 代码（只保证 CLI 可被编排）。

@@ -1,6 +1,6 @@
 """上市状态、市值、财报日距 · EP301§R07、§R10。"""
 
-from tradesys.calendar_utils import weekdays_between
+from tradesys.calendar_utils import trading_days_between
 from tradesys.models import Check, Snapshot
 
 
@@ -8,7 +8,7 @@ def days_to_earnings(snap: Snapshot, max: int) -> Check:
     """距下次财报的交易日数是否 ≤ max。"""
     if snap.next_earnings is None:
         return Check(None, ("缺少财报日期",), missing=True)
-    days = weekdays_between(snap.session_date, snap.next_earnings)
+    days = trading_days_between(snap.session_date, snap.next_earnings)
     return Check(
         0 <= days <= max,
         (f"距财报 {days} 个交易日", f"earnings={snap.next_earnings}", "请确认无明显利空消息"),

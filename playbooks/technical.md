@@ -14,7 +14,7 @@
   - `full`：完整实现
   - `simple`：近似算法，结果 `review=True`，报告标"⚠ 近似算法，需人工复核"
   - `stub`：占位，返回 MANUAL
-  - `YAML`：结构由人在 `data/structures/<TICKER>.yaml` 中标注，无结构时返回 MANUAL
+  - `YAML`：结构由人在 `data/structures/<TICKER>.yaml` 中标注，无结构时返回 MANUAL；人在 `absent` 中确认不存在的结构（`zone / trendline / neckline / flag`），相关规则判为不适用（False）
 - **rule 块**：规则的可执行部分（语法见 DESIGN §4）。阈值就写在 rule 块里，注释标注参数名与状态（`已裁决` 用户决定 / `source` 原文给出 / `默认值` 待实盘校准）。正文中的 `veto.max_stop_pct` 等是参数的说明性名字。没有 rule 块的规则尚未实现，执行器跳过。
 - **结果状态**：`PASS / VETO / WARN / MANUAL / UNAVAILABLE`（DESIGN §3）。
 - **时点**：所有规则在 `session_date`（最近一个已收盘交易日）上求值，记为 **T**；T-1 为前一交易日。
@@ -34,6 +34,8 @@
 | 5 | **结构位置第一，K 线形态第二**。脱离支撑阻力谈形态无效 | EP124 |
 | 6 | **成交量验真**。放量形成的形态 / 突破 / 破位才有效；缩量的有待验证 | EP010, EP124 |
 | 7 | 高胜率买点的现实上限约 60–70%，不存在 80–90% 的"神化买点"。仅作认知背景，不入代码 | EP302 |
+| 8 | **规则服务于实盘**。不为某只股票硬找旗形、头肩顶；图上没有的结构，人在 YAML `absent` 中声明，相关规则即不适用 | 用户裁决 2026-10-02 |
+| 9 | **不知道等于不买**。已实现的判定规则无法判断（MANUAL / UNAVAILABLE）时，不给出买入结论 | 用户裁决 2026-10-02 |
 
 ---
 
@@ -357,7 +359,7 @@ ask: 你是否长期跟踪过该公司基本面？若只是因为跌幅大而觉
 - **Condition**：
   - 非 NYSE / NASDAQ 主板（OTC）→ VETO
   - 市值 < `universe.min_market_cap`（50 亿美元）→ WARN（不否决，由用户决定）
-  - 大跌后社群热度异常 → MANUAL
+  - 大跌后社群热度异常 → MANUAL（见 V10b）
   - `Fundamental` 缺失 → UNAVAILABLE
 - **Automation**：partial
 - **Source**：EP301§R10、EP302 · Voice 核对 ✔（"100亿以内的相对来讲都缺乏一些稳定性"）
@@ -373,11 +375,16 @@ when:
   - market_cap_below: {usd: 5000000000}  # universe.min_market_cap · source 50 亿
 ```
 
+- **Status**：confirmed
+
+### V10b 大跌后社群热度异常
+
+- **Impl**：stub（从 V10 拆出：与市值 WARN 同属一段时会被 if / elif 遮蔽，而小市值时最需要问）
+- **Source**：EP301§R10
 ```rule
 kind: manual
 ask: 大跌后社群热度是否异常？（V1 不做社群数据，请自查）
 ```
-- **Status**：confirmed
 
 ## 3.2 上涨过程（V11–V16）
 
@@ -570,10 +577,10 @@ target: {nearest_resistance: {}}
 
 ### S03 上升旗形放量突破 A 线
 
-- **Impl**：YAML（A/B 线由 YAML 给出，不自动识别旗形）
+- **Impl**：YAML（旗杆与 A/B 线都由人画，不自动识别旗形）
 - **Condition**（EP150）：
-  1. 旗杆：陡峭上涨段，期间平均量能高于其前 20 日均量
-  2. 旗面：YAML 中的 `flag_upper`（A 线）与 `flag_lower`（B 线），由人画出向下通道
+  1. 旗杆：YAML 中的 `flag_pole`（p1 = 杆底，p2 = 杆顶），期间平均量能高于杆底前 20 日均量
+  2. 旗面：杆顶之后；YAML 中的 `flag_upper`（A 线）与 `flag_lower`（B 线），由人画出向下通道
   3. 旗面平均量能 < 旗杆平均量能；旗面内无持续放量大阴线
   4. 旗面最低收盘价 ≥ 旗杆 Fib 61.8%
   5. T 日放量阳线收盘 > A 线
@@ -584,7 +591,7 @@ target: {nearest_resistance: {}}
 ```rule
 kind: setup
 when:
-  - flag_break: {}
+  - flag_break: {pre: 20}     # s03.pre_pole_days · source「其前 20 日」
   - green_expand: {}
 entry: {session_close: {}}
 stop: {buffered_flag_lower: {pct: 0.01}}
@@ -663,7 +670,7 @@ trust: review
 when:
   - trend: {direction: down}
   - volume_dry: {ratio: 0.6, offset: 1}          # s06.dry_ratio · 默认值
-  - bullish_engulfing: {tier: 1, short_shadow_ratio: 0.1}
+  - bullish_engulfing: {short_shadow_ratio: 0.1}   # 只认一级吞没 · source
   - volume_state: {state: expand}
 entry: {session_close: {}}
 stop: {buffered_low: {pct: 0.01}}
@@ -676,7 +683,7 @@ trust: review
 when:
   - trend: {direction: sideways}
   - volume_dry: {ratio: 0.6, offset: 1}
-  - bullish_engulfing: {tier: 1, short_shadow_ratio: 0.1}
+  - bullish_engulfing: {short_shadow_ratio: 0.1}   # 只认一级吞没 · source
   - volume_state: {state: expand}
 entry: {session_close: {}}
 stop: {buffered_low: {pct: 0.01}}
@@ -750,16 +757,91 @@ target: {impulse_high: {}}
 
 # 5. Advice Rules
 
-Advice 只提醒，不影响结论。
+Advice 只提醒，不影响结论（`kind: advice`，DESIGN §4）。命中时 `say` 与工具证据进入报告「提醒」。
 
-| ID | 内容 | 触发 | Source |
-| --- | --- | --- | --- |
-| A-V17 | 若出现非财报消息引起的盘前盘后大涨大跌，不参与；以常规时段开盘竞价为准 | 固定 | EP301§R17, EP272 |
-| A-V18 | 美东 9:30–10:00 不下单 | 固定 | EP301§R18 |
-| A-EARN | 距下次财报 N 个交易日；N ≤ 5 时高亮；到期日前有财报时注明 Band68 含财报波动 | 有财报日期时 | EP301§R07, EP189 |
-| A-BAND68 | Band68 与结构对齐：L 是否跌破最近强支撑；L 是否跌破 Fib 61.8%（期权在定价破位）；H 是否超出最近强阻力 | Band68 可用时 | EP189 |
-| A-TOP | T 日出现见顶形态（P-CANDLE 见顶序列），提示"当天不宜抄底 / 追高" | 命中时 | EP124, EP302§B1 案例 |
-| A-INTRADAY | 分时图备忘：加仓 / 减仓时的盘中注意事项。**固定文本，不做计算**。内容待 EP095 / EP111 / EP161 入库后补充 | 固定 | EP095, EP111, EP161 |
+### A-V17 盘前盘后异动不参与
+
+- **Source**：EP301§R17、EP272
+```rule
+kind: advice
+say: 非财报的盘前盘后大涨大跌不参与，以常规时段开盘为准
+```
+
+### A-V18 开盘半小时不下单
+
+- **Source**：EP301§R18
+```rule
+kind: advice
+say: 美东 9:30–10:00 不下单
+```
+
+### A-EARN 财报临近
+
+- **Source**：EP301§R07、EP189。到期日前有财报时，Band68 含财报波动。
+```rule
+kind: advice
+say: 财报临近，Band68 含财报波动
+when:
+  - days_to_earnings: {max: 5}     # a_earn.highlight_days · 默认值
+```
+
+### A-BAND68 Band68 区间
+
+- **Source**：EP189（算法见 P-BAND68）
+```rule
+kind: advice
+say: Band68 区间
+when:
+  - band68_range: {max_strike_gap_pct: 0.02}   # band68.max_strike_gap_pct · source
+```
+
+### A-BAND68-SUP Band68 下沿触及支撑
+
+- **Source**：EP189
+```rule
+kind: advice
+say: Band68 下沿可能跌破最近支撑
+when:
+  - band68_edge: {against: support, max_strike_gap_pct: 0.02}
+```
+
+### A-BAND68-RES Band68 上沿超出阻力
+
+- **Source**：EP189
+```rule
+kind: advice
+say: Band68 上沿可能超出最近阻力
+when:
+  - band68_edge: {against: resistance, max_strike_gap_pct: 0.02}
+```
+
+### A-BAND68-FIB Band68 下沿低于 Fib 61.8%
+
+- **Source**：EP189（期权在定价破位）
+```rule
+kind: advice
+say: Band68 下沿低于 Fib 61.8%，期权在定价破位
+when:
+  - band68_edge: {against: fib, level: 0.618, max_strike_gap_pct: 0.02}
+```
+
+### A-TOP 见顶形态
+
+- **Source**：EP124、EP302§B1 案例
+```rule
+kind: advice
+say: 见顶形态（流星线），当天不宜抄底 / 追高
+when:
+  - shooting_star: {short_shadow_ratio: 0.1}
+```
+
+### A-INTRADAY 分时图备忘
+
+- **Source**：EP095、EP111、EP161（未入库）
+```rule
+kind: advice
+say: 分时图备忘待 EP095 / EP111 / EP161 入库
+```
 
 **推迟到 V2**（需要持仓数据）：
 
@@ -786,4 +868,4 @@ Advice 只提醒，不影响结论。
 ## 后续工作
 
 - 实盘校准 rule 块中注释为"默认值"的参数，校准后改为"已裁决"。
-- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加：V01–V16、S01–S09。
+- 为其余规则补上 rule 块（见 `docs/plans/phase-1.md`）。已加：V01–V16、V10b、S01–S09、A-*。
