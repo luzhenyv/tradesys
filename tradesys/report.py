@@ -1,6 +1,6 @@
-"""把 RunOutput 收成 Markdown 备忘录（DESIGN §5 结论规则）。
+"""把 RunOutput 收成 Markdown 备忘录（DESIGN §5、WORKFLOW §4）。
 
-过渡形态：章节随规则实现进度增减。报告只按 status / trust / kind 归类，不认识任何规则。
+报告只按 status / trust / kind 与档案字段归类，不认识任何规则 ID。
 """
 
 from tradesys.calendar_utils import trading_days_between
@@ -20,27 +20,18 @@ def _decide(r: RuleResult) -> bool:
     return r.trust == "decide" and r.kind in ("veto", "warn")
 
 
-def candidates(out: RunOutput, trust: str = "decide") -> list[Candidate]:
-    return [c for c in out.candidates if _setup_trust(out, c.setup_id) == trust]
+def _blocking(r: RuleResult) -> bool:
+    """未知的 veto 块阻断；未知的 warn 不阻断。"""
+    return _decide(r) and r.status in UNKNOWN and r.kind == "veto"
 
 
 def blockers(out: RunOutput, c: Candidate) -> tuple[list[RuleResult], list[RuleResult]]:
-    """阻断该候选的 decide 结果：(VETO, 可能是 VETO 的未知)，含上下文规则与本候选的规则。"""
+    """阻断该候选的 decide 结果：(VETO, 可能是 VETO 的未知)，含上下文与本候选。"""
     rows = [r for r in out.results if _decide(r) and r.candidate_id in (None, c.id)]
     return (
         [r for r in rows if r.status == RuleStatus.VETO],
         [r for r in rows if _blocking(r)],
     )
-
-
-def _blocking(r: RuleResult) -> bool:
-    """未知的 veto 块阻断买入；未知的 warn 块即使命中也只是 WARN，不阻断。"""
-    return _decide(r) and r.status in UNKNOWN and r.kind == "veto"
-
-
-def verdict(out: RunOutput, c: Candidate) -> str:
-    vetoes, unknown = blockers(out, c)
-    return "否决" if vetoes else "待确认" if unknown else "存活"
 
 
 def plan_state(out: RunOutput, c: Candidate) -> str:
@@ -54,21 +45,39 @@ def plan_state(out: RunOutput, c: Candidate) -> str:
     return "可执行"
 
 
+def _plans(out: RunOutput) -> list[Candidate]:
+    return [c for c in out.candidates if c.expires is not None]
+
+
+def _cause(r: RuleResult) -> str:
+    return f"{r.rule_id} {r.title}"
+
+
 def conclusion(out: RunOutput) -> str:
-    """不知道等于不买：只有全部 decide 规则可判定且未否决的候选才是买点。"""
-    context_veto = any(
-        _decide(r) and r.status == RuleStatus.VETO and r.candidate_id is None for r in out.results
-    )
-    cands = candidates(out)
-    tags = [verdict(out, c) for c in cands]
-    if context_veto:
-        return "不买 · 否决"
-    if "存活" in tags:
-        return "买（long）"
-    if "待确认" in tags:
-        c = cands[tags.index("待确认")]
-        return f"不买 · 待确认 {len(blockers(out, c)[1])} 项"
-    return "不买 · 否决" if cands else "不买 · 无买点"
+    """档案视图的一行结论（WORKFLOW §4）。"""
+    snap = out.snapshot
+    if snap is None or "idea.reason" not in snap.facts:
+        return "先写想法理由"
+    if plans := _plans(out):
+        c = plans[0]
+        state = plan_state(out, c)
+        if state == "过期":
+            return f"计划 {c.id} 已过期"
+        if state == "暂停":
+            vetoes, unknown = blockers(out, c)
+            return f"计划 {c.id} 暂停（{_cause((vetoes or unknown)[0])}）"
+        return f"计划 {c.id} 可执行"
+    vetoes = [
+        r
+        for r in out.results
+        if _decide(r) and r.candidate_id is None and r.status == RuleStatus.VETO
+    ]
+    if vetoes:
+        return f"不买（{_cause(vetoes[0])}）"
+    asks = [r for r in out.results if _blocking(r) and r.candidate_id is None]
+    if asks:
+        return f"待回答 {len(asks)} 项"
+    return "审查通过，尚无计划"
 
 
 def _price(c: Candidate) -> str:
@@ -83,14 +92,14 @@ def _line(r: RuleResult) -> str:
     who = f" · {r.candidate_id}" if r.candidate_id else ""
     mark = " ⚠ 近似" if r.review else ""
     ev = f" — {'；'.join(r.evidence)}" if r.evidence else ""
-    return f"- **{r.rule_id} {r.title}** {r.status}{who}{mark}{ev}"
+    return f"- **{r.rule_id} {r.title}**{who}{mark}{ev}"
 
 
 def _cand_block(out: RunOutput, c: Candidate) -> list[str]:
     if c.expires is not None:
         tag, who = plan_state(out, c), c.id
     else:
-        tag = verdict(out, c) if _setup_trust(out, c.setup_id) == "decide" else "参考"
+        tag = "参考" if _setup_trust(out, c.setup_id) == "review" else c.grade
         who = f"{c.setup_id} · grade {c.grade}"
     rows = [r for r in out.results if r.candidate_id == c.id and r.status != RuleStatus.PASS]
     return [f"### {who}（{tag}）", f"- {_price(c)}", *map(_line, rows)]
@@ -98,11 +107,7 @@ def _cand_block(out: RunOutput, c: Candidate) -> list[str]:
 
 def _header(out: RunOutput) -> list[str]:
     snap = out.snapshot
-    head = conclusion(out)
-    lines = [f"# {snap.ticker} · {snap.session_date}", "", f"**{head}**"]
-    if head == "买（long）":
-        c = next(c for c in candidates(out) if verdict(out, c) == "存活")
-        lines += [f"{c.setup_id} · grade {c.grade} · {_price(c)}"]
+    lines = [f"# {snap.ticker} · {snap.session_date}", "", f"**{conclusion(out)}**"]
     close = f"{snap.bars.last.close:.2f}" if snap.bars.items else "—"
     data = [f"收盘 {close}", f"as_of {snap.as_of.isoformat()}"]
     if snap.next_earnings:
@@ -119,38 +124,20 @@ def render(out: RunOutput) -> str:
     if out.snapshot is None:
         raise ValueError("RunOutput 缺少 snapshot")
     parts = _header(out)
-
-    hits = [
-        r
-        for r in out.results
-        if _decide(r) and r.candidate_id is None and r.status in (RuleStatus.VETO, RuleStatus.WARN)
-    ]
-    parts += ["## 判定", "", *map(_line, hits)]
-    for c in candidates(out):
-        parts += _cand_block(out, c)
-    if not hits and not candidates(out):
-        parts.append("无成熟买点，无上下文否决。")
-    parts.append("")
-
-    pending = [r for r in out.results if _decide(r) and r.status in UNKNOWN]
-    if pending:
-        tag = {True: "（阻断）", False: "（不阻断：warn）"}
-        parts += ["## 待确认", "", *(_line(r) + tag[_blocking(r)] for r in pending), ""]
-    unsure = [r for r in out.results if r.kind == "setup" and r.status in UNKNOWN]
-    if unsure:
-        parts += ["## 未能评估的买点（不阻断）", "", *map(_line, unsure), ""]
-
-    ref_hits = [
-        r
-        for r in out.results
-        if r.trust == "review" and r.status in (RuleStatus.VETO, RuleStatus.WARN)
-    ]
-    if ref_hits or candidates(out, "review"):
-        parts += ["## 参考（近似，不计入结论）", "", *map(_line, ref_hits)]
-        for c in candidates(out, "review"):
+    if asks := [r for r in out.results if _blocking(r)]:
+        parts += ["## 待回答", "", *map(_line, asks), ""]
+    if plans := _plans(out):
+        parts += ["## 计划", ""]
+        for c in plans:
             parts += _cand_block(out, c)
         parts.append("")
-
+    setups = [c for c in out.candidates if c.expires is None]
+    unsure = [r for r in out.results if r.kind == "setup" and r.status in UNKNOWN]
+    if setups or unsure:
+        parts += ["## 系统建议买点", ""]
+        for c in setups:
+            parts += _cand_block(out, c)
+        parts += [*map(_line, unsure), ""]
     advice = [r for r in out.results if r.kind == "advice" and r.status == RuleStatus.WARN]
     parts += ["## 提醒", "", *(f"- {'；'.join(r.evidence)}" for r in advice), ""]
     return "\n".join(parts).rstrip() + "\n"

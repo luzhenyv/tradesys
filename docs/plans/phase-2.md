@@ -1,12 +1,12 @@
 # Phase 2 — 从「一次判断」到「一只股票的档案」
 
-> 状态：⓪–④ 已完成，⑤ 起待实施（2026-10-02）。
+> 状态：⓪–⑤ 已完成，⑥ 起待实施（2026-10-02）。
 > 目标：实现 `docs/WORKFLOW.md`。10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，最终得到「计划可执行 / 暂停 / 过期」的结论。
 > 约束：遵守 `CLAUDE.md`。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。每步在同一提交里更新受影响的文档（DESIGN、WORKFLOW、README、playbook）。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-**预算**：包现为 2254 行（④ 后，**超出约 50**；上限约 2200）。⑦ 余下「结论分支」留给 ⑤；其余已在 ④ 删除。
+**预算**：包现为 2241 行（⑤ 后，**超出约 40**；上限约 2200）。⑦ 已在 ③–⑤ 做完。
 
 ## 已定决策（2026-10-02）
 
@@ -99,12 +99,14 @@ V09 清单（每项布尔，可在 playbook 中增删）：
 - 同一提交做了 ⑦ 中与 ④ 无关的删除：规则覆盖 / `idle`、`report` 只读 RunOutput、CLI `--candidates`、`fetch --expiry weekly`。
 - 概念账：计划 = Candidate + 两个字段；`Snapshot.plans` 为管道载体。包 2254 行。
 
-## ⑤ 报告：档案视图
+## ⑤ 报告：档案视图 ✅（2026-10-02）
 
-- 章节按 WORKFLOW §4：结论 → 待回答 → 计划 → 系统建议买点 → 提醒。
-- 结论一行，优先级：先写想法理由 / 不买（否决原因）/ 待回答 N 项 / 审查通过，尚无计划 / 计划 p1 可执行 / 计划 p1 暂停（原因）/ 计划 p1 已过期。
-- 待回答：规则 ID + 提问 + 要填写的 key。
-- 测试：每种结论各一例。
+- 章节按 WORKFLOW §4：结论 → 待回答 → 计划 → 系统建议买点 → 提醒。删判定 / 待确认 / 未能评估 / 参考。
+- 结论一行：先写想法理由 → 有计划则过期 / 暂停（原因）/ 可执行 → 无计划则不买（原因）/ 待回答 N 项 / 审查通过，尚无计划。setup 不再写成「买（long）」。
+- 待回答：阻断的未知 veto（规则 ID + 提问 + key）。warn 未知不列入。
+- 测试：七种 headline 各一例（真实 playbook）。
+- ⑦ 结论分支：删 `verdict()` 与四种旧 headline。
+- 概念账：− `verdict`、− 四种旧 headline。包 2241 行。
 
 ## ⑥ 日志
 
@@ -117,7 +119,7 @@ V09 清单（每项布尔，可在 playbook 中增删）：
 | --- | --- | --- |
 | `kind: manual`、`trust: memo`、`block_trust` 的分支 | ③ 已删 | −15 |
 | 报告「规则覆盖」章节、`RunOutput.idle` | ④ 已删 | −30 |
-| 报告的结论分支（`verdict` / `blockers` / 四种 headline） | ⑤ 以计划状态取代 | 约 0（重写） |
+| 报告的结论分支（`verdict` / `blockers` / 四种 headline） | ⑤ 已删 `verdict` 与旧 headline；`blockers` 留给 `plan_state` | 约 0（重写） |
 | `report` 读 Snapshot 再内部 run 的路径，以及 `report` 的 PLAYBOOK 参数 | ④ 已删；`report` 只读 RunOutput | −10 |
 | `run --candidates` | ④ 已删；档案 `plans` 是候选的唯一外部入口 | −8 |
 | `fetch --expiry weekly` 与 `pick_expiry` 的 kind 参数 | ④ 已删 | −5 |

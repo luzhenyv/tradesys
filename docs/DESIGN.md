@@ -8,7 +8,7 @@
 playbooks/*.md      规则：自然语言原文 + 可执行的 rule 块（数据）
 tradesys/tools/     工具：纯函数，Snapshot → Check
 tradesys/run.py     执行器：解析 rule 块，调用工具，汇总 RunOutput（不含任何规则）
-tradesys/report.py  RunOutput → Markdown（只按 status / trust / kind 归类）
+tradesys/report.py  RunOutput → Markdown（档案视图：结论 / 待回答 / 计划 / 建议买点 / 提醒）
 tradesys/adapters/  取数（yahoo、fake）与档案 YAML；唯一的 I/O
 tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 ```
@@ -62,14 +62,17 @@ ask: 提问               # 可选：块未知时放在 evidence 首位
 - **没有 OR、没有表达式语言**：需要 OR 就拆成两个块，或写成一个工具。
 - **解析时校验**：kind 与键必须合法，必填项齐全；拼写错误直接报错。
 
-## 5. 结论
+## 5. 结论与报告
 
-只看 `trust: decide`：
+报告章节：结论 → 待回答 → 计划 → 系统建议买点 → 提醒。结论一行，优先级：
 
-- `不买 · 否决`：上下文 VETO，或全部候选被 VETO。
-- `买（long）`：存在候选，上下文与该候选的全部 decide 规则都是 PASS / WARN。
-- `不买 · 待确认 N 项`：存在候选，但有可能导致 VETO 的 decide 规则未知。
-- `不买 · 无买点`。
+1. 档案无 `idea.reason` → `先写想法理由`
+2. 有计划（`Candidate.expires` 有值）：`计划 p1 已过期` / `计划 p1 暂停（规则 ID 标题）` / `计划 p1 可执行`（过期优先；暂停原因取 `blockers` 首条）
+3. 无计划 + 上下文 decide VETO → `不买（规则 ID 标题）`
+4. 无计划 + 上下文阻断未知（decide 的 veto 为 MANUAL / UNAVAILABLE）→ `待回答 N 项`
+5. 其余 → `审查通过，尚无计划`
+
+setup 产出只进「系统建议买点」，不把结论写成买入。warn 未知不阻断。暂停 / 过期由 `plan_state` 计算，不存档。
 
 ## 6. 工具
 

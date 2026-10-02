@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tradesys.adapters.fake import fake_snapshot, make_bars, make_chain
 from tradesys.models import Candidate, Fact, Fundamental, RuleStatus, RunOutput, Zone
-from tradesys.report import conclusion, plan_state, render, verdict
+from tradesys.report import conclusion, plan_state, render
 from tradesys.run import run
 
 PLAYBOOK = Path(__file__).parents[2] / "playbooks" / "technical.md"
@@ -15,35 +15,25 @@ PRIOR_20 = [100.0] + [101.0] * 19
 CHOP = fake_snapshot(make_bars([100.0 + (i % 3) for i in range(30)]))
 
 
-def test_context_veto_is_do_not_buy():
-    snap = fake_snapshot(make_bars(PRIOR_20 + [99.0]))
-    out = run(PLAYBOOK, snap)
-    assert conclusion(out) == "不买 · 否决"
-    md = render(out)
-    assert "**不买 · 否决**" in md
-    assert "## 判定" in md
-    assert "V01" in md
-
-
-def test_no_setup_is_no_buy_point():
+def test_no_idea_asks_to_write_reason():
     out = run(PLAYBOOK, CHOP)
-    assert conclusion(out) == "不买 · 无买点"
+    assert conclusion(out) == "先写想法理由"
     md = render(out)
-    assert "**不买 · 无买点**" in md
-    assert "## 待确认" in md and "（阻断）" in md
+    assert "**先写想法理由**" in md
+    assert "## 待回答" in md
+    assert "请回答 v06.sector_top_loser" in md
     assert "结构：无档案结构" in md
     assert "请在 YAML 中标注结构" in md
-    assert "## 未能评估的买点（不阻断）" in md
-    assert "请回答 v06.sector_top_loser（阻断）" in md
+    assert "## 系统建议买点" in md
 
 
-def test_simple_setup_is_reference_not_buy():
+def test_simple_setup_is_suggestion_not_buy():
     closes = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 104.0]
     snap = fake_snapshot(make_bars(closes, lows=[*closes[:-1], 103.0]))
     out = run(PLAYBOOK, snap)
-    assert conclusion(out) == "不买 · 无买点"
+    assert conclusion(out) == "先写想法理由"
     md = render(out)
-    assert "## 参考（近似，不计入结论）" in md
+    assert "## 系统建议买点" in md
     assert "S05 · grade" in md
     assert "⚠ 近似" in md
 
@@ -52,14 +42,20 @@ S01_ZONE = Zone("z-100-120", "resistance", 100.0, 120.0)
 S01_T = date(2026, 1, 22)
 V09 = ("business", "revenue_mix", "last_earnings", "growth", "margin", "guidance")
 V09 += ("competitors", "catalyst", "tracked")
-# 人的回答全部「无问题」：有理由，非板块领跌，未被止损，熟悉基本面，社群正常
-CLEAN = {
-    "idea.reason": Fact("回踩突破区间", S01_T),
-    "v06.sector_top_loser": Fact(False, S01_T),
-    "v08.stopped_out": Fact(False, S01_T),
-    "v10b.social_hype": Fact(False, S01_T),
-    **{f"v09.{k}": Fact(True, S01_T) for k in V09},
-}
+
+
+def _clean(t: date) -> dict:
+    """人的回答全部「无问题」：有理由，非板块领跌，未被止损，熟悉基本面，社群正常。"""
+    return {
+        "idea.reason": Fact("回踩突破区间", t),
+        "v06.sector_top_loser": Fact(False, t),
+        "v08.stopped_out": Fact(False, t),
+        "v10b.social_hype": Fact(False, t),
+        **{f"v09.{k}": Fact(True, t) for k in V09},
+    }
+
+
+CLEAN = _clean(S01_T)
 
 
 def _s01_snap(zones=(S01_ZONE,), **inputs):
@@ -75,17 +71,16 @@ def _s01_snap(zones=(S01_ZONE,), **inputs):
     )
 
 
-def test_s01_without_target_waits_for_confirmation():
-    # review #1：无上方阻力 → target None → V14 MANUAL；V10 缺基本面 → 不知道等于不买
+def test_s01_without_target_is_still_a_suggestion():
     out = run(PLAYBOOK, _s01_snap())
     assert any(c.setup_id == "S01" for c in out.candidates)
-    assert conclusion(out).startswith("不买 · 待确认")
+    assert conclusion(out) == "先写想法理由"
     md = render(out)
-    assert "S01 · grade" in md and "（待确认）" in md
+    assert "S01 · grade" in md
     assert "V14" in md
 
 
-def test_s01_with_target_and_known_context_is_buy():
+def test_reviewed_without_plan_is_ready():
     snap = _s01_snap(
         zones=(S01_ZONE, Zone("r2", "resistance", 160.0, 170.0)),
         absent=("trendline", "neckline", "flag"),
@@ -94,26 +89,22 @@ def test_s01_with_target_and_known_context_is_buy():
         facts=CLEAN,
     )
     out = run(PLAYBOOK, snap)
-    assert conclusion(out) == "买（long）", render(out)
+    assert conclusion(out) == "审查通过，尚无计划", render(out)
     md = render(out)
-    assert "**买（long）**" in md
-    assert "S01 · grade" in md and "（存活）" in md
+    assert "**审查通过，尚无计划**" in md
+    assert "## 系统建议买点" in md and "S01 · grade" in md
 
 
-def test_s01_vetoed_by_v05_wide_stop_is_listed_as_vetoed():
-    # review #2：止损过宽被 V05 否决的成熟买点必须出现在「判定」里
+def test_s01_vetoed_by_v05_is_listed_under_suggestions():
     snap = _s01_snap(
         absent=("trendline", "neckline", "flag"),
         fundamental=Fundamental(1e11, "NMS", None),
     )
     snap = replace(snap, zones=(Zone("z-90-120", "resistance", 90.0, 120.0),))
     out = run(PLAYBOOK, snap)
-    (c,) = [x for x in out.candidates if x.setup_id == "S01"]
-    assert verdict(out, c) == "否决"
-    assert conclusion(out) == "不买 · 否决"
-    md = render(out)
-    assert "S01 · grade" in md and "（否决）" in md
-    assert "V05" in md.split("## 判定")[1].split("\n## ")[0]
+    assert any(c.setup_id == "S01" for c in out.candidates)
+    assert conclusion(out) == "先写想法理由"
+    assert "V05" in render(out).split("## 系统建议买点")[1]
 
 
 def test_report_warn_and_advice_and_band68():
@@ -140,7 +131,7 @@ def test_cli_report_from_run_output():
     result = runner.invoke(app, ["report"], input=to_json(run(PLAYBOOK, CHOP)))
     assert result.exit_code == 0
     assert "# TEST ·" in result.stdout
-    assert "**不买 · 无买点**" in result.stdout
+    assert "**先写想法理由**" in result.stdout
 
 
 def test_unknown_warn_does_not_block_buy():
@@ -155,8 +146,8 @@ def test_unknown_warn_does_not_block_buy():
     out = run(PLAYBOOK, snap)
     (v10,) = [r for r in out.results if r.rule_id == "V10"]
     assert (v10.status, v10.kind) == (RuleStatus.UNAVAILABLE, "warn")
-    assert conclusion(out) == "买（long）"
-    assert "（不阻断：warn）" in render(out)
+    assert conclusion(out) == "审查通过，尚无计划"
+    assert "待回答" not in conclusion(out)
 
 
 def test_header_shows_expired_groups_and_absent():
@@ -175,9 +166,9 @@ def test_unanswered_question_blocks_buy_until_answered():
     )
     partial = {k: v for k, v in CLEAN.items() if k != "v09.tracked"}
     out = run(PLAYBOOK, _s01_snap(facts=partial, **kw))
-    assert conclusion(out) == "不买 · 待确认 1 项"
-    assert "请回答 v09.tracked（阻断）" in render(out)
-    assert conclusion(run(PLAYBOOK, _s01_snap(facts=CLEAN, **kw))) == "买（long）"
+    assert conclusion(out) == "待回答 1 项"
+    assert "请回答 v09.tracked" in render(out)
+    assert conclusion(run(PLAYBOOK, _s01_snap(facts=CLEAN, **kw))) == "审查通过，尚无计划"
 
 
 def test_plan_expires_the_session_after_expires():
@@ -205,8 +196,29 @@ def test_plan_paused_by_v12_and_resumes_when_near_support():
     far = run(PLAYBOOK, _plan_snap(140.0, 130.0, 155.0))
     (p,) = [c for c in far.candidates if c.id == "p1"]
     assert plan_state(far, p) == "暂停"
-    assert "（暂停）" in render(far)
+    assert conclusion(far) == "计划 p1 暂停（V12 突破后悬空、远离支撑）"
+    assert "## 计划" in render(far)
     near = run(PLAYBOOK, _plan_snap(125.0, 119.0, 140.0))
     (p,) = [c for c in near.candidates if c.id == "p1"]
     assert plan_state(near, p) == "可执行"
-    assert "（可执行）" in render(near)
+    assert conclusion(near) == "计划 p1 可执行"
+
+
+def test_new_low_without_plan_is_do_not_buy():
+    bars = make_bars(PRIOR_20 + [99.0])
+    snap = fake_snapshot(bars, facts=_clean(bars.last.d))
+    out = run(PLAYBOOK, snap)
+    assert conclusion(out) == "不买（V01 收盘价创近期新低）"
+
+
+def test_idea_without_answers_is_pending():
+    t = CHOP.session_date
+    out = run(PLAYBOOK, replace(CHOP, facts={"idea.reason": Fact("想买", t)}))
+    assert conclusion(out).startswith("待回答 ")
+
+
+def test_expired_plan_headline():
+    snap = _plan_snap(125.0, 119.0, 140.0)
+    (plan,) = snap.plans
+    out = run(PLAYBOOK, replace(snap, plans=(replace(plan, expires=date(2026, 1, 8)),)))
+    assert conclusion(out) == "计划 p1 已过期"
