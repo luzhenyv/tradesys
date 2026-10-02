@@ -94,12 +94,16 @@ ask: 提问               # manual 必填
 `data/tickers/<TICKER>.yaml`，一只股票一个文件。人写，机器只读；结构人画，机器只判定，不自动识别。
 
 - `zones`（support / resistance 区间）、`lines`（trendline / neckline / flag_pole / flag_upper / flag_lower，两点定线）。
-- 按 `confirmed_at ≤ session_date` 载入；`status: proposed` 不载入；多余键（strength、note…）忽略。
+- 日期（`confirmed_at` / `at`）≤ T 的下一个交易日即载入：盘后到次日开盘前补写的内容属于对 T 的判断，回放时看不到更晚的内容。`status: proposed` 不载入；多余键（strength、note…）忽略。
 - `absent: [{kind, confirmed_at}]`：人确认不存在的结构（zone / trendline / neckline / flag）→ 相关工具返回 False（不适用），而不是 None（请标注）。
 - **结构按类过期**：zone / trendline / neckline / flag（含该类的 absent）中最旧的条目超过 20 个交易日（`dossier.STRUCTURE_TTL`），整类不载入，记入 `Snapshot.expired`；相关工具提问「已过期，请复核」，报告头列出过期的类。
 - 每种旗形线只能有一条，多条 → MANUAL。
 - 顶层 `exchange:`：人确认的交易所代码，只在取不到当天基本面时补上（历史回放）。
-- `facts: {key: {value, at}}`：人的回答，按 `at ≤ session_date` 载入为 `Snapshot.facts`；`idea: {reason, source, at}` 载入为 `idea.reason` / `idea.source`。目前尚无规则读取（Phase 2 ②③）。
+- `facts: {key: {value, at}}`：人的回答，载入为 `Snapshot.facts`；`idea: {reason, source, at}` 载入为 `idea.reason` / `idea.source`。
+- 回答由两个工具读取（`tools/answer.py`）：
+  - `fact: {key, is | min | max, ttl}`：回答满足条件 → True；不给条件时只要求已回答（有 → False）。
+  - `checklist: {keys, min, ttl}`：为「是」的项数 < min → True。
+  - 缺失或过期 → None（提问，evidence 写明要回答的 key）。`ttl` 为交易日数：回答日到 T 少于 ttl 才有效（`ttl: 1` = 只对当次 T 有效）；省略则不过期。
 
 ## 9. 边界
 

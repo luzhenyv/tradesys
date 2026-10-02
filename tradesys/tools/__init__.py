@@ -6,6 +6,7 @@ candidate 规则里可以组合不接收 candidate 的工具（只看 Snapshot�
 
 import inspect
 
+from tradesys.tools.answer import checklist, fact
 from tradesys.tools.band68 import band68_edge, band68_range
 from tradesys.tools.candle import (
     bullish_engulfing,
@@ -80,6 +81,8 @@ TOOLS = {
     "rr_below": rr_below,
     "band68_range": band68_range,
     "band68_edge": band68_edge,
+    "fact": fact,
+    "checklist": checklist,
 }
 
 

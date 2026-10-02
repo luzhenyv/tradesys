@@ -101,12 +101,16 @@ def trading_days_between(start: date, end: date) -> int:
     return n
 
 
+def next_trading_day(d: date) -> date:
+    n = d + timedelta(days=1)
+    while not is_trading_day(n):
+        n += timedelta(days=1)
+    return n
+
+
 def session_open_since(session: date, now: datetime) -> bool:
     """session 收盘之后，到 now 为止是否已有新的常规时段开盘（下一交易日 9:30 ET）。"""
-    d = session + timedelta(days=1)
-    while not is_trading_day(d):
-        d += timedelta(days=1)
-    return to_et(now) >= datetime.combine(d, MARKET_OPEN, tzinfo=ET)
+    return to_et(now) >= datetime.combine(next_trading_day(session), MARKET_OPEN, tzinfo=ET)
 
 
 def at_offset(snap: Snapshot, offset: int) -> Snapshot:

@@ -1,12 +1,12 @@
 # Phase 2 — 从「一次判断」到「一只股票的档案」
 
-> 状态：⓪ ① 已完成，② 起待实施（2026-10-02）。
+> 状态：⓪ ① ② 已完成，③ 起待实施（2026-10-02）。
 > 目标：实现 `docs/WORKFLOW.md`。10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，最终得到「计划可执行 / 暂停 / 过期」的结论。
 > 约束：遵守 `CLAUDE.md`。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。每步在同一提交里更新受影响的文档（DESIGN、WORKFLOW、README、playbook）。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-**预算**：包现为 2202 行（上限约 2200；① 后）。删除（⑦，约 −70）要抵消新增（②④），目标净增约 0。
+**预算**：包现为 2263 行（② 后，**超出约 60**；上限约 2200）。③ 删 manual / memo、⑦ 删约 70 行后须回到预算内；④ 新增前先做 ⑦ 中与 ④ 无关的删除。
 
 ## 已定决策（2026-10-02）
 
@@ -45,15 +45,15 @@
 - 实跑影响：`AMD.yaml` 于 08-20 确认，至 10-01 已超过 20 个交易日，全部结构过期，需人复核后更新 `confirmed_at`。
 - 概念账：+ `Fact`（即 ② 的「人工回答」，提前定义）；− `structures_confirmed`；`Structures` 改名 `Dossier`。
 
-## ② 人工回答工具
+## ② 人工回答工具 ✅（2026-10-02）
 
-- `fact: {key, is | min | max, ttl}`：
-  - `is`：`value == is`；`min` / `max`：数字比较。
-  - 缺失或过期 → None（提问，不是缺数据）。
-- `checklist: {keys, min, ttl}`：任一 key 缺失或过期 → None，evidence 列出缺的 key；否则为真的项数 < min → True（否决）。
-- `ttl`：交易日数，或 `earnings`（到下次财报；无财报日按 63 个交易日）。按 `session_date` 与回答的 `at` 计算。
-- 纯函数测试：过期边界、earnings 回退、缺 key 列表、数字阈值。
-- 概念账：+ 人工回答（facts）。
+- `tools/answer.py`：`fact: {key, is | min | max, ttl}`、`checklist: {keys, min, ttl}`（语义见 DESIGN §8）。缺失或过期 → None（提问，`missing=False`）；`fact` 的未知参数直接报错（`iss: true` 不会悄悄变成「只要求已回答」）。
+- 测试：`tests/unit/test_answer.py`（ttl 边界含次日早上补写、数字阈值、无条件、清单 6/9 与 7/9、`is` 经 rule 块传入）。
+- 与原计划的差异：
+  - 去掉 `ttl: earnings`：取不到历史财报日，无法判断两次回答之间是否发生过财报；V09 直接写 `ttl: 63`（约一季度），少一个概念。
+  - `fact` 不给条件 = 只要求已回答（有 → False，无 → 提问）：I01 直接用它。
+  - 修正 ① 的可见性：日期 ≤ T 的**下一个交易日**即可见（原为 ≤ T），否则上海早上补写的回答与结构会被丢掉；`calendar_utils.next_trading_day`。
+- 概念账：+ `fact` / `checklist` 两个工具；`Fact` 已在 ① 定义。
 
 ## ③ 规则迁移：manual → 普通块 + `ask` + `fact`
 
@@ -66,7 +66,7 @@
 | V06 板块跌幅前 10% | `fact: {key: v06.sector_top_loser, is: true}` → VETO | 1 |
 | V07 无明显利空 | 原四个条件 + `fact: {key: v07.no_bad_news, is: false}`（Kleene：其余条件成立时才提问） | 1 |
 | V08 近期被止损 | `fact: {key: v08.stopped_out, is: true}` | 1 |
-| V09 基本面熟悉度 | `checklist`（下表 9 项，`min: 7`） | earnings |
+| V09 基本面熟悉度 | `checklist`（下表 9 项，`min: 7`） | 63（约一季度） |
 | V10b 社群热度异常 | `fact: {key: v10b.social_hype, is: true}` | 5 |
 | S08 板块龙头大阳 | setup：`fact: {key: s08.sector_breakout_leader, is: true}` + `green_expand`；entry 为收盘价；**不写 stop**（V05 否决，由人在计划中定止损）；target 为最近阻力 | 1 |
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from tradesys.calendar_utils import trading_days_between
+from tradesys.calendar_utils import next_trading_day, trading_days_between
 from tradesys.models import Fact, Line, Zone
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2] / "data" / "tickers"
@@ -22,10 +22,10 @@ def _as_date(v: object) -> date:
     return date.fromisoformat(str(v))
 
 
-def _skip(raw: dict, session_date: date) -> bool:
+def _skip(raw: dict, cutoff: date) -> bool:
     if raw.get("status") == "proposed" or "confirmed_at" not in raw:
         return True
-    return _as_date(raw["confirmed_at"]) > session_date
+    return _as_date(raw["confirmed_at"]) > cutoff
 
 
 def _group(section: str, raw: dict) -> str:
@@ -36,7 +36,7 @@ def _group(section: str, raw: dict) -> str:
     return "flag" if kind.startswith("flag") else kind
 
 
-def _facts(data: dict, session_date: date) -> dict[str, Fact]:
+def _facts(data: dict, cutoff: date) -> dict[str, Fact]:
     raw = {str(k): v for k, v in (data.get("facts") or {}).items()}
     idea = data.get("idea") or {}
     for f in ("reason", "source"):
@@ -46,7 +46,7 @@ def _facts(data: dict, session_date: date) -> dict[str, Fact]:
         k: Fact(v["value"], _as_date(v["at"]))
         for k, v in raw.items()
         if isinstance(v, dict) and "value" in v and v.get("at") is not None
-        if _as_date(v["at"]) <= session_date
+        if _as_date(v["at"]) <= cutoff
     }
 
 
@@ -61,12 +61,16 @@ class Dossier:
 
 
 def load(ticker: str, session_date: date, root: Path = DEFAULT_ROOT) -> Dossier:
-    """读档案；文件不存在时返回空。"""
+    """读档案；文件不存在时返回空。
+
+    日期 ≤ T 的下一个交易日即可见：盘后到次日开盘前补写的结构与回答属于对 T 的判断。
+    """
     path = Path(root) / f"{ticker}.yaml"
     if not path.is_file():
         return Dossier()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    kept = {k: [r for r in data.get(k) or [] if not _skip(r, session_date)] for k in KEYS}
+    cutoff = next_trading_day(session_date)
+    kept = {k: [r for r in data.get(k) or [] if not _skip(r, cutoff)] for k in KEYS}
     oldest: dict[str, date] = {}
     for k in KEYS:
         for r in kept[k]:
@@ -85,4 +89,4 @@ def load(ticker: str, session_date: date, root: Path = DEFAULT_ROOT) -> Dossier:
     )
     absent = tuple(str(r["kind"]) for r in kept["absent"])
     exchange = str(data["exchange"]) if data.get("exchange") else None
-    return Dossier(zones, lines, absent, expired, exchange, _facts(data, session_date))
+    return Dossier(zones, lines, absent, expired, exchange, _facts(data, cutoff))

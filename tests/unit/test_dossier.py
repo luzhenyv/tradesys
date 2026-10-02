@@ -147,3 +147,18 @@ def test_yahoo_exchange_wins_over_yaml(tmp_path):
     (tmp_path / "TEST.yaml").write_text("exchange: PNK\n", encoding="utf-8")
     snap = fake_snapshot(make_bars([100.0]), fundamental=Fundamental(1e11, "NYQ", None))
     assert attach_dossier(snap, tmp_path).fundamental.exchange == "NYQ"
+
+
+def test_answers_written_before_next_open_belong_to_t(tmp_path):
+    # T = 周五 01-16；下一交易日为 01-20（01-19 MLK 休市）：周末与周二早上补写的都可见，01-21 不可见
+    text = """
+facts:
+  sat: {value: true, at: 2026-01-17}
+  tue: {value: true, at: 2026-01-20}
+  wed: {value: true, at: 2026-01-21}
+zones:
+  - {id: z, kind: support, low: 1, high: 2, confirmed_at: 2026-01-20}
+"""
+    d = _load(tmp_path, text, date(2026, 1, 16))
+    assert set(d.facts) == {"sat", "tue"}
+    assert len(d.zones) == 1
