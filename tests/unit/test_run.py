@@ -11,7 +11,7 @@ import pytest
 
 from tradesys.adapters.fake import fake_snapshot, make_bars, trading_days
 from tradesys.calendar_utils import make_snapshot
-from tradesys.models import Candidate, Fundamental, Line, RuleStatus, Zone
+from tradesys.models import Candidate, Fact, Fundamental, Line, RuleStatus, Zone
 from tradesys.run import parse, run
 
 PLAYBOOK = Path(__file__).parents[2] / "playbooks" / "technical.md"
@@ -78,7 +78,23 @@ def test_v11_shrinking_new_high_vetoes():
 
 def test_human_questions_are_asked_without_answers():
     results = run(PLAYBOOK, SNAP).results
-    assert {r.rule_id for r in results if r.status == RuleStatus.MANUAL} >= {"V06", "V08", "V09"}
+    assert {r.rule_id for r in results if r.status == RuleStatus.MANUAL} >= {
+        "I01",
+        "V06",
+        "V08",
+        "V09",
+        "V10b",
+    }
+
+
+def test_i01_missing_reason_asks_and_answered_passes():
+    asked = next(x for x in run(PLAYBOOK, SNAP).results if x.rule_id == "I01")
+    assert asked.status == RuleStatus.MANUAL
+    assert asked.evidence[0].startswith("为什么想买")
+    assert "请回答 idea.reason" in asked.evidence
+    t = SNAP.session_date
+    snap = fake_snapshot(SNAP.bars, facts={"idea.reason": Fact("订单超预期", t)})
+    assert _status(run(PLAYBOOK, snap), "I01") == RuleStatus.PASS
 
 
 def test_candidate_rules_skip_without_candidates():
@@ -255,6 +271,7 @@ def test_v07_downtrend_earnings_drop_and_expand_without_bad_news_vetoes():
 
     asked = v07()
     assert asked.status == RuleStatus.MANUAL
+    assert asked.evidence[0].startswith("这次下跌有明显的利空消息吗")
     assert asked.evidence[-1] == "请回答 v07.no_bad_news"
     vetoed = v07(**{"v07.no_bad_news": Fact(True, t)})
     assert vetoed.status == RuleStatus.VETO and vetoed.review
@@ -272,6 +289,35 @@ def test_v07_uptrend_passes():
     bars = make_bars(prior + [prior[-1] * 0.96], [1e6] * 29 + [2e6])
     snap = fake_snapshot(bars, next_earnings=_weekdays_after(bars.last.d, 2))
     assert _status(run(PLAYBOOK, snap), "V07") == RuleStatus.PASS
+
+
+V09_KEYS = (
+    "v09.business",
+    "v09.revenue_mix",
+    "v09.last_earnings",
+    "v09.growth",
+    "v09.margin",
+    "v09.guidance",
+    "v09.competitors",
+    "v09.catalyst",
+    "v09.tracked",
+)
+
+
+def test_v09_checklist_6_of_9_vetoes_7_of_9_passes_and_missing_asks():
+    t = SNAP.session_date
+
+    def v09(**facts):
+        snap = fake_snapshot(SNAP.bars, facts=facts)
+        return next(x for x in run(PLAYBOOK, snap).results if x.rule_id == "V09")
+
+    six = {k: Fact(i < 6, t) for i, k in enumerate(V09_KEYS)}
+    seven = {k: Fact(i < 7, t) for i, k in enumerate(V09_KEYS)}
+    assert v09(**six).status == RuleStatus.VETO
+    assert v09(**seven).status == RuleStatus.PASS
+    asked = v09(**{k: v for k, v in seven.items() if k != "v09.tracked"})
+    assert asked.status == RuleStatus.MANUAL
+    assert "请回答 v09.tracked" in asked.evidence
 
 
 def test_v10_otc_vetoes():
@@ -452,6 +498,24 @@ def test_s07_hammer_after_shrinking_new_low():
     assert cand.stop == pytest.approx(96.0 * 0.99)
     assert _status(out, "S07") == RuleStatus.PASS
     assert _status(out, "V01") == RuleStatus.VETO
+
+
+def test_s08_leader_green_expand_has_no_stop_and_v05_vetoes():
+    n = 10
+    closes = [100.0] * n + [110.0]
+    bars = make_bars(closes, [1e6] * n + [2e6], opens=[100.0] * n + [105.0])
+    t = bars.last.d
+    snap = fake_snapshot(
+        bars,
+        zones=(Zone("r1", "resistance", 120.0, 130.0),),
+        facts={"s08.sector_breakout_leader": Fact(True, t)},
+    )
+    out = run(PLAYBOOK, snap)
+    (c,) = [x for x in out.candidates if x.setup_id == "S08"]
+    assert c.entry == 110.0
+    assert c.stop is None
+    assert c.target == 120.0
+    assert _status(out, "V05", "S08") == RuleStatus.VETO
 
 
 def test_v16_top_divergence_in_overbought_vetoes():

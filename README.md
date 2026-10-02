@@ -2,7 +2,7 @@
 
 个人交易助手：把自然语言的投资方法论变成可执行、可追溯的判断。
 
-对一只美股，在某个盘后时点，回答「明天能不能买」：逐条检查不买原则（V）、识别买点（S）、给出提醒（A），并说明理由与需要人工确认的事项。
+对一只美股，在某个盘后时点，回答「明天能不能买」：先写想法理由（I），再逐条检查不买原则（V）、识别买点（S）、给出提醒（A），并说明理由与需要人工确认的事项。
 
 ## 核心功能
 
@@ -43,7 +43,7 @@ uv run ruff check . && uv run ruff format .
 | `CLAUDE.md` | 开发守则 |
 | `docs/DESIGN.md` | 系统设计：分层、数据对象、rule 块语法、工具约定、数据约束 |
 | `docs/WORKFLOW.md` | 一只股票从想法到记录的流程（Phase 2 目标） |
-| `playbooks/technical.md` | 交易规则：原则、不买（V）、买点（S）、提醒（A） |
+| `playbooks/technical.md` | 交易规则：原则、想法（I）、不买（V）、买点（S）、提醒（A） |
 | `playbooks/technical-primitives.md` | 规则共用的原语定义（P-*） |
 | `docs/sources/` | 原始材料与 Source ID |
 | `docs/plans/` | 阶段计划；当前：`phase-2.md` |

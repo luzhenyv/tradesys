@@ -1,12 +1,12 @@
 # Phase 2 — 从「一次判断」到「一只股票的档案」
 
-> 状态：⓪ ① ② 已完成，③ 起待实施（2026-10-02）。
+> 状态：⓪–③ 已完成，④ 起待实施（2026-10-02）。
 > 目标：实现 `docs/WORKFLOW.md`。10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，最终得到「计划可执行 / 暂停 / 过期」的结论。
 > 约束：遵守 `CLAUDE.md`。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。每步在同一提交里更新受影响的文档（DESIGN、WORKFLOW、README、playbook）。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-**预算**：包现为 2263 行（② 后，**超出约 60**；上限约 2200）。③ 删 manual / memo、⑦ 删约 70 行后须回到预算内；④ 新增前先做 ⑦ 中与 ④ 无关的删除。
+**预算**：包现为 2248 行（③ 后，**超出约 50**；上限约 2200）。⑦ 删约 70 行后须回到预算内；④ 新增前先做 ⑦ 中与 ④ 无关的删除。
 
 ## 已定决策（2026-10-02）
 
@@ -55,16 +55,16 @@
   - 修正 ① 的可见性：日期 ≤ T 的**下一个交易日**即可见（原为 ≤ T），否则上海早上补写的回答与结构会被丢掉；`calendar_utils.next_trading_day`。
 - 概念账：+ `fact` / `checklist` 两个工具；`Fact` 已在 ① 定义。
 
-## ③ 规则迁移：manual → 普通块 + `ask` + `fact`
+## ③ 规则迁移：manual → 普通块 + `ask` + `fact` ✅（2026-10-02）
 
 - 执行器：删除 `kind: manual` 与 `trust: memo`；任何块可写 `ask:`，块未知时 `ask` 作为提问放在 evidence 首位。advice 仅靠 `kind` 区分，不参与判定。
-- playbook 新增「想法」一节：`I01 写下想法理由`，`fact` 读 `idea`，缺失 → 提问。
+- playbook 新增「想法」一节：`I01 写下想法理由`，`fact` 读 `idea.reason`，缺失 → 提问。
 - 改写（有效期为默认值，写在 rule 块的 `ttl`）：
 
 | 规则 | 写法 | ttl |
 | --- | --- | --- |
 | V06 板块跌幅前 10% | `fact: {key: v06.sector_top_loser, is: true}` → VETO | 1 |
-| V07 无明显利空 | 原四个条件 + `fact: {key: v07.no_bad_news, is: false}`（Kleene：其余条件成立时才提问） | 1 |
+| V07 无明显利空 | 原四个条件 + `fact: {key: v07.no_bad_news, is: true}`（Kleene：其余条件成立时才提问） | 1 |
 | V08 近期被止损 | `fact: {key: v08.stopped_out, is: true}` | 1 |
 | V09 基本面熟悉度 | `checklist`（下表 9 项，`min: 7`） | 63（约一季度） |
 | V10b 社群热度异常 | `fact: {key: v10b.social_hype, is: true}` | 5 |
@@ -85,7 +85,10 @@ V09 清单（每项布尔，可在 playbook 中增删）：
 | `v09.tracked` | 已跟踪该公司满 3 个月 |
 
 - 测试（真实 playbook）：V09 6/9 → VETO、7/9 → PASS、缺 1 项 → 提问；V07 上涨中不提问；I01 缺理由 → 提问；S08 回答为真 → 产出无止损的建议，V05 否决。
-- 概念账：− manual、− memo。
+- 与原计划的差异：
+  - V07 用 `is: true`（计划表写成 `is: false`）。voice：「也没有什么太多的利空消息，这种情况不要买」→ 无明显利空才否决。
+- 文档：DESIGN 去掉 `kind: manual` / `trust: memo`；README 补想法（I）。
+- 概念账：− manual、− memo。包 2248 行。
 
 ## ④ 计划生命周期
 

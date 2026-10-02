@@ -33,22 +33,22 @@ tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 ## 3. Playbook 格式
 
 - 一份 Markdown。每条规则是一个 `### ID 标题` 段落：条件、来源（附 voice 引文）、案例，以及若干 ```rule 块。没有 rule 块的段落不执行。
-- **ID**：`V` 不买原则（EP301 顺序），`S` 买点（EP302 顺序），`A-*` 提醒，`P-*` 原语（定义在 `*-primitives.md`，不执行）。
+- **ID**：`I` 想法、`V` 不买原则（EP301 顺序），`S` 买点（EP302 顺序），`A-*` 提醒，`P-*` 原语（定义在 `*-primitives.md`，不执行）。
 - **阈值写在 rule 块里**，注释标注状态：`已裁决`（用户决定）/ `source`（原文给出）/ `默认值`（待实盘校准）。
 - **时点**：规则在 `session_date`（最近一个已收盘交易日）上求值，记为 T。
-- **实现等级**由 rule 块本身体现：普通块 = 完整实现；`trust: review` = 近似算法；`kind: manual` = 人工；依赖结构的工具在无结构时返回 MANUAL。
+- **实现等级**由 rule 块本身体现：普通块 = 完整实现；`trust: review` = 近似算法；依赖结构的工具在无结构时返回 MANUAL；人的回答由 `fact` / `checklist` 读取，缺失或过期 → 未知。
 
 ## 4. rule 块语法与执行语义
 
 ```yaml
-kind: veto              # veto | warn | setup | advice | manual
+kind: veto              # veto | warn | setup | advice
 scope: candidate        # 可选：对每个候选买点运行一次
-trust: review           # 可选：decide（默认）| review | memo
+trust: review           # 可选：decide（默认）| review
 when:                   # 工具列表，AND
   - new_high: {n: 20}
   - volume_state: {state: shrink}
 say: 提醒文本            # 可选：命中时放在 evidence 最前
-ask: 提问               # manual 必填
+ask: 提问               # 可选：块未知时放在 evidence 首位
 ```
 
 - **块内 AND 用 Kleene 逻辑**：任一工具 False → 不命中；否则有 None → 未知。setup 块例外：有 None 即未知。
@@ -58,8 +58,7 @@ ask: 提问               # manual 必填
   - `veto` / `warn`：命中 → VETO / WARN。
   - `setup`：命中后用 `entry` / `stop` / `target` 工具取 `Check.value`，产出至多一个 Candidate；entry 取不到则不产出。grade 取工具给出的，否则 `review` → B，否则 A。执行器先跑全部 setup，再跑其余规则。
   - `advice`：`when` 可省略（总是提醒）；只进报告「提醒」。
-  - `manual`：只写 `ask`，结果为 MANUAL。
-- **trust**：`decide` 计入结论；`review` 只作参考；`memo`（manual / advice 的默认）不参与判定。`Check.review` 只用于展示「⚠ 近似」。
+- **trust**：`decide` 计入结论；`review` 只作参考。advice 由报告按 `kind` 排除，不参与判定。`Check.review` 只用于展示「⚠ 近似」。
 - **没有 OR、没有表达式语言**：需要 OR 就拆成两个块，或写成一个工具。
 - **解析时校验**：kind 与键必须合法，必填项齐全；拼写错误直接报错。
 
