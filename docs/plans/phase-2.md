@@ -1,12 +1,12 @@
 # Phase 2 — 从「一次判断」到「一只股票的档案」
 
-> 状态：⓪–⑤ 已完成，⑥ 起待实施（2026-10-02）。
+> 状态：⓪–⑧ 已完成（2026-10-02）。
 > 目标：实现 `docs/WORKFLOW.md`。10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，最终得到「计划可执行 / 暂停 / 过期」的结论。
 > 约束：遵守 `CLAUDE.md`。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。每步在同一提交里更新受影响的文档（DESIGN、WORKFLOW、README、playbook）。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-**预算**：包现为 2241 行（⑤ 后，**超出约 40**；上限约 2200）。⑦ 已在 ③–⑤ 做完。
+**预算**：包现为 2241 行（⑧ 后，**超出约 40**；上限约 2200）。⑦ 已在 ③–⑤ 做完。
 
 ## 已定决策（2026-10-02）
 
@@ -108,10 +108,11 @@ V09 清单（每项布尔，可在 playbook 中增删）：
 - ⑦ 结论分支：删 `verdict()` 与四种旧 headline。
 - 概念账：− `verdict`、− 四种旧 headline。包 2241 行。
 
-## ⑥ 日志
+## ⑥ 日志 ✅（2026-10-02）
 
 - 按 WORKFLOW §5：`tee >(jq -c 'del(.snapshot.bars)' >> data/journal/<TICKER>.jsonl)`。RunOutput 已包含决定 3 要保存的全部内容（snapshot 里的档案、基本面、财报日、期权链），只去掉日线。
-- 不新增命令、不改代码；`data/journal/` 已加入 `.gitignore`（只在本地）。
+- 不新增命令、不改代码；`data/journal/` 已在 `.gitignore`。README / DESIGN 只交叉引用 WORKFLOW，不复制管道。
+- 概念账：无。
 
 ## ⑦ 代码精简（依据 ⓪ 后的代码 review）
 
@@ -129,17 +130,12 @@ V09 清单（每项布尔，可在 playbook 中增删）：
 - MANUAL 与 UNAVAILABLE 的区分：前者请人回答，后者请补数据。
 - `Fundamental.sector`：V06 提问时可以显示所属板块。
 
-## ⑧ 场景验收
+## ⑧ 场景验收 ✅（2026-10-02）
 
-- `tests/unit/test_workflow.py`，用 fake 行情 + 真实 playbook 走完整循环：
-  1. 只有 ticker → 「先写想法理由」。
-  2. 写入 idea → 「待回答 N 项」（V06 / V08 / V09 / V10b，V07 视行情）。
-  3. 写入回答 → 「审查通过，尚无计划」，附系统建议买点。
-  4. 写入 plan → 「计划 p1 可执行」。
-  5. 次日行情触发 V12 → 「计划 p1 暂停（V12 …）」；再次日恢复。
-  6. 超过 expires → 「计划 p1 已过期」。
-- 实跑：在真实 AMD 档案上运行 WORKFLOW §5 的循环。
-- 文档：去掉 WORKFLOW 的「Phase 2 目标」状态行；DESIGN 与 README 描述新现状。
+- `tests/unit/test_workflow.py`：fake 行情 + 真实 playbook，编辑档案 YAML 走完六个阶段：先写想法理由 → 待回答（V06 / V08 / V09 / V10b）→ 审查通过，尚无计划（附 S01）→ 计划 p1 可执行 → 次日收回突破 V12 暂停、再次日恢复 → 已过期。
+- 实跑：`fetch AMD --as-of 2026-10-01T17:00 --tz America/New_York | run | report` → **先写想法理由**（档案无 idea；结构 08-20 确认已过期）。
+- 文档：去掉 WORKFLOW 的「Phase 2 目标」状态行；README 文档表同步。
+- 包 2241 行（上限约 2200）。
 
 ## 不在 Phase 2
 

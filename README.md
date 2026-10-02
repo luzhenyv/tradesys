@@ -42,7 +42,7 @@ uv run ruff check . && uv run ruff format .
 | --- | --- |
 | `CLAUDE.md` | 开发守则 |
 | `docs/DESIGN.md` | 系统设计：分层、数据对象、rule 块语法、工具约定、数据约束 |
-| `docs/WORKFLOW.md` | 一只股票从想法到记录的流程（Phase 2 目标） |
+| `docs/WORKFLOW.md` | 一只股票从想法到记录的流程；盯盘管道与本地日志 |
 | `playbooks/technical.md` | 交易规则：原则、想法（I）、不买（V）、买点（S）、提醒（A） |
 | `playbooks/technical-primitives.md` | 规则共用的原语定义（P-*） |
 | `docs/sources/` | 原始材料与 Source ID |
