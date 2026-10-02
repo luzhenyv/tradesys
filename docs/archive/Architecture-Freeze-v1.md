@@ -377,7 +377,7 @@ data_sources = {
 }
 ```
 
-发生 fallback 时记录为 `"market": "yahoo (fallback: ibkr unavailable)"`。该字典进入 `AnalysisContext` 与报告 AMDdata。
+发生 fallback 时记录为 `"market": "yahoo (fallback: ibkr unavailable)"`。该字典进入 `AnalysisContext` 与报告 Metadata。
 
 ---
 
@@ -649,7 +649,7 @@ V1 只输出 Markdown：
 
 ```text
 Trading Memo
-├── Analysis AMDdata      ticker, as_of, session_date, data sources, config
+├── Analysis Metadata      ticker, as_of, session_date, data sources, config
 ├── Conclusion             不买 / 待人工确认 / 存在候选买点
 ├── Market Overview
 ├── Features
@@ -659,7 +659,7 @@ Trading Memo
 ├── Manual Checklist       所有 manual / unavailable 项
 ├── Setup Candidates       含 candidate veto 结果
 ├── Advice / Reminder
-└── System AMDdata        enabled features / setups, disabled vetoes, simple / stub 规则清单
+└── System Metadata        enabled features / setups, disabled vetoes, simple / stub 规则清单
 ```
 
 报告本身是一份**可审计的交易决策记录**。
