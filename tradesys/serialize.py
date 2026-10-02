@@ -40,6 +40,8 @@ def from_plain(tp: Any, data: Any) -> Any:
     origin, args = typing.get_origin(tp), typing.get_args(tp)
     if origin in (typing.Union, types.UnionType):
         return from_plain(next(a for a in args if a is not type(None)), data)
+    if origin is dict:
+        return {k: from_plain(args[1], v) for k, v in data.items()}
     if origin is tuple:
         if len(args) == 2 and args[1] is Ellipsis:
             return tuple(from_plain(args[0], x) for x in data)

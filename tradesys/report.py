@@ -93,13 +93,10 @@ def _header(out: RunOutput) -> list[str]:
     if snap.next_earnings:
         n = trading_days_between(snap.session_date, snap.next_earnings)
         data.append(f"下次财报 {snap.next_earnings}（{n} 个交易日）")
-    if snap.structures_confirmed:
-        n = trading_days_between(snap.structures_confirmed, snap.session_date)
-        st = f"结构：确认于 {snap.structures_confirmed}（{n} 个交易日前）"
-        st += f" · absent: {', '.join(snap.absent)}" if snap.absent else ""
-    else:
-        st = "结构：无 YAML"
-    return [*lines, "", " · ".join(data), st, ""]
+    st = [f"已过期，请复核：{', '.join(snap.expired)}"] if snap.expired else []
+    st += [f"absent: {', '.join(snap.absent)}"] if snap.absent else []
+    st += [] if st or snap.zones or snap.lines else ["无档案结构"]
+    return [*lines, "", " · ".join(data), "结构：" + " · ".join(st or ["有效"]), ""]
 
 
 def _coverage(out: RunOutput) -> list[str]:

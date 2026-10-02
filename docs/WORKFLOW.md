@@ -40,7 +40,7 @@
 ```yaml
 ticker: AMD
 
-idea:                          # 必填
+idea:                          # 必填；载入为回答 idea.reason / idea.source
   reason: 数据中心 GPU 订单超预期
   source: news                 # news | research | chart | impulse
   at: 2026-10-01
@@ -49,7 +49,7 @@ facts:                         # 人的回答：值（布尔或数字）+ 确认
   v07.no_bad_news: {value: true, at: 2026-10-01}
   v09.tracked:     {value: true, at: 2026-09-15}
 
-exchange: NMS                  # 以下与现在的结构 YAML 相同（DESIGN §8）
+exchange: NMS                  # 以下与 DESIGN §8 相同
 zones: [...]
 lines: [...]
 absent: [...]

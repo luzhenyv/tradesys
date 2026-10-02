@@ -113,7 +113,7 @@ def test_band68_fetched_at_0100_et_next_day(monkeypatch):
     import tradesys.adapters.yahoo as yahoo
 
     monkeypatch.setattr(yahoo.yf, "Ticker", _FakeTicker)
-    monkeypatch.setattr(yahoo, "attach_structures", lambda s: s)
+    monkeypatch.setattr(yahoo, "attach_dossier", lambda s: s)
     now = datetime(2026, 10, 3, 1, 0, tzinfo=ET)
     snap = fetch_snapshot("X", now, now=now)
     assert snap.session_date == date(2026, 10, 2)
@@ -125,7 +125,7 @@ def test_no_chain_once_next_session_opened(monkeypatch):
     import tradesys.adapters.yahoo as yahoo
 
     monkeypatch.setattr(yahoo.yf, "Ticker", _FakeTicker)
-    monkeypatch.setattr(yahoo, "attach_structures", lambda s: s)
+    monkeypatch.setattr(yahoo, "attach_dossier", lambda s: s)
     now = datetime(2026, 10, 5, 9, 45, tzinfo=ET)  # 周一开盘后，as_of 取周一盘中
     snap = fetch_snapshot("X", now, now=now)
     assert snap.session_date == date(2026, 10, 2)

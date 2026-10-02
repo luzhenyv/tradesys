@@ -11,9 +11,11 @@ ASK = "请在 YAML 中标注结构"
 
 
 def no_structure(snap: Snapshot, kind: str) -> Check:
-    """缺少 kind 结构：人已在 absent 中确认不存在 → False（不适用）；否则 None（请标注）。"""
+    """缺少 kind 结构：人已在 absent 中确认不存在 → False（不适用）；否则 None（请标注或复核）。"""
     if kind in snap.absent:
         return Check(False, (f"已确认无 {kind}，不适用",))
+    if kind in snap.expired:
+        return Check(None, (f"{kind} 已过期，请复核后更新 confirmed_at",))
     return Check(None, (f"{ASK}（{kind}），或在 absent 中声明不存在",))
 
 

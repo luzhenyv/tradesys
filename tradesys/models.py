@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
@@ -74,7 +74,7 @@ class Fundamental:
     sector: str | None
 
 
-# ---------- 人工标注的结构（data/structures/<TICKER>.yaml） ----------
+# ---------- 档案中人写的内容（data/tickers/<TICKER>.yaml） ----------
 
 
 @dataclass(frozen=True)
@@ -98,6 +98,14 @@ class Line:
         return v1 + slope * (d.toordinal() - d1.toordinal())
 
 
+@dataclass(frozen=True)
+class Fact:
+    """人的回答：值（布尔、数字或文本）+ 回答日期。有效期由读取它的 rule 块决定。"""
+
+    value: bool | float | str
+    at: date
+
+
 # ---------- 工具的输入与输出 ----------
 
 
@@ -115,7 +123,8 @@ class Snapshot:
     zones: tuple[Zone, ...] = ()
     lines: tuple[Line, ...] = ()
     absent: tuple[str, ...] = ()  # 人已确认不存在的结构：zone / trendline / neckline / flag
-    structures_confirmed: date | None = None  # YAML 中最新的 confirmed_at，报告据此提示结构新旧
+    expired: tuple[str, ...] = ()  # 过期而未载入的结构类，需人复核
+    facts: dict[str, Fact] = field(default_factory=dict)  # 人的回答，含 idea.reason / idea.source
     fundamental: Fundamental | None = None
     next_earnings: date | None = None
     chain: Chain | None = None

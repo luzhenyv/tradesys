@@ -8,7 +8,7 @@
 
 - **规则即数据**：方法论写在 `playbooks/technical.md`，每条规则 = 原文条件 + 来源 + 案例 + 可执行的 `rule` 块。换风格只换 playbook。
 - **小工具组合**：`tradesys/tools/` 中的纯函数（新低、量能、RSI、结构破位、K 线形态、Band68…）由 rule 块按名字组合调用。
-- **结构由人画**：支撑阻力区间、趋势线、颈线、旗形写在 `data/structures/<TICKER>.yaml`，机器只判定。
+- **一只股票一份档案**：`data/tickers/<TICKER>.yaml` 写人画的结构（支撑阻力区间、趋势线、颈线、旗形）与人的回答，机器只判定。
 - **不用未来数据**：任意 as_of 回放日线；基本面、财报日、期权链只取当天。
 - **CLI 管道，JSON 进出**：每一步可单独运行，将来由 agent 用同一组命令编排。
 
@@ -56,7 +56,7 @@ playbooks/          规则（数据）
 tradesys/tools/     工具：纯函数 Snapshot → Check
 tradesys/run.py     执行器：解析 rule 块并调用工具，不含规则
 tradesys/report.py  Markdown 备忘录
-tradesys/adapters/  取数（yahoo）与结构 YAML 读取
-data/structures/    人画的结构
+tradesys/adapters/  取数（yahoo）与档案 YAML 读取
+data/tickers/       档案：一只股票一个 YAML
 tests/unit/         测试（规则案例通过真实 playbook 运行）
 ```

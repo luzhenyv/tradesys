@@ -13,8 +13,8 @@ from pathlib import Path
 
 import yfinance as yf
 
-from tradesys.adapters.structures import DEFAULT_ROOT
-from tradesys.adapters.structures import load as load_structures
+from tradesys.adapters.dossier import DEFAULT_ROOT
+from tradesys.adapters.dossier import load as load_dossier
 from tradesys.calendar_utils import (
     is_monthly_opex,
     make_snapshot,
@@ -85,7 +85,7 @@ def fetch_snapshot(
     session = make_snapshot(bars, as_of).session_date
 
     if local.date() != current.date():
-        return attach_structures(
+        return attach_dossier(
             make_snapshot(bars, as_of, sources=("market=yahoo", "其余=none（as_of 不是今天）"))
         )
 
@@ -103,7 +103,7 @@ def fetch_snapshot(
             ticker, exp, as_of, oc.calls, oc.puts, bars.upto(session).last.close
         )
         options = f"options=yahoo（{exp}）"
-    return attach_structures(
+    return attach_dossier(
         make_snapshot(
             bars,
             as_of,
@@ -115,10 +115,11 @@ def fetch_snapshot(
     )
 
 
-def attach_structures(snap: Snapshot, root: Path = DEFAULT_ROOT) -> Snapshot:
-    """把已确认且 as_of 可见的 YAML 结构挂到 Snapshot 上；缺交易所代码时用 YAML 的 exchange。"""
-    st = load_structures(snap.ticker, snap.session_date, root)
+def attach_dossier(snap: Snapshot, root: Path = DEFAULT_ROOT) -> Snapshot:
+    """把档案中 as_of 可见的结构与回答挂到 Snapshot 上；缺交易所代码时用档案的 exchange。"""
+    st = load_dossier(snap.ticker, snap.session_date, root)
     tags = ["structures=yaml" if st.zones or st.lines or st.absent else "structures=none"]
+    tags += [f"expired={','.join(st.expired)}"] if st.expired else []
     fund = snap.fundamental
     if st.exchange and (fund is None or fund.exchange is None):
         fund = replace(fund or Fundamental(None, None, None), exchange=st.exchange)
@@ -128,7 +129,8 @@ def attach_structures(snap: Snapshot, root: Path = DEFAULT_ROOT) -> Snapshot:
         zones=st.zones,
         lines=st.lines,
         absent=st.absent,
-        structures_confirmed=st.confirmed,
+        expired=st.expired,
+        facts=st.facts,
         fundamental=fund,
         sources=(*snap.sources, *tags),
     )

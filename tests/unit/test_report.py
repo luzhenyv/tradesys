@@ -31,7 +31,7 @@ def test_no_setup_is_no_buy_point_and_lists_coverage():
     md = render(out)
     assert "**不买 · 无买点**" in md
     assert "## 待确认" in md and "（阻断）" in md
-    assert "结构：无 YAML" in md
+    assert "结构：无档案结构" in md
     assert "候选规则 4（无候选，未运行）：V05 V12 V13 V14" in md
     assert "请在 YAML 中标注结构" in md
     assert "## 未能评估的买点（不阻断）" in md
@@ -149,8 +149,7 @@ def test_unknown_warn_does_not_block_buy():
     assert "（不阻断：warn）" in render(out)
 
 
-def test_header_shows_structure_date_and_absent():
-    snap = replace(_s01_snap(absent=("flag", "neckline")), structures_confirmed=date(2026, 1, 15))
+def test_header_shows_expired_groups_and_absent():
+    snap = replace(_s01_snap(absent=("flag", "neckline")), expired=("trendline",))
     md = render(run(PLAYBOOK, snap))
-    # 01-15 → 01-22，跳过 01-19 马丁·路德·金纪念日
-    assert "结构：确认于 2026-01-15（4 个交易日前） · absent: flag, neckline" in md
+    assert "结构：已过期，请复核：trendline · absent: flag, neckline" in md

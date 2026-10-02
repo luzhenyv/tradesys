@@ -9,7 +9,7 @@ playbooks/*.md      规则：自然语言原文 + 可执行的 rule 块（数据
 tradesys/tools/     工具：纯函数，Snapshot → Check
 tradesys/run.py     执行器：解析 rule 块，调用工具，汇总 RunOutput（不含任何规则）
 tradesys/report.py  RunOutput → Markdown（只按 status / trust / kind 归类）
-tradesys/adapters/  取数（yahoo、fake）与结构 YAML；唯一的 I/O
+tradesys/adapters/  取数（yahoo、fake）与档案 YAML；唯一的 I/O
 tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 ```
 
@@ -21,7 +21,8 @@ tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 
 | 对象 | 内容 |
 | --- | --- |
-| `Snapshot` | 一只股票在 as_of 时点的全部输入：bars（截至 session_date）、zones、lines、absent、fundamental、next_earnings、chain、sources |
+| `Snapshot` | 一只股票在 as_of 时点的全部输入：bars（截至 session_date）、zones、lines、absent、expired、facts、fundamental、next_earnings、chain、sources |
+| `Fact` | 人的回答：value（布尔、数字或文本）、at（回答日期） |
 | `Candidate` | 候选买点：entry、stop、target、grade、evidence；`rr` 为计算属性 |
 | `Check` | 工具输出：`hit`（True / False / None）、evidence、`review`（近似算法）、`missing`（缺数据）、`value`（setup 取价）、`grade` |
 | `RuleResult` | 规则结果：rule_id、title、status、evidence、candidate_id、review、trust、kind |
@@ -88,16 +89,17 @@ ask: 提问               # manual 必填
 - **交易日历**：`calendar_utils.NYSE_HOLIDAYS`（2025–2027，需逐年补充）；月度 OpEx 遇休市提前到周四。
 - **数据源**：yfinance（`adapters/yahoo.py`），测试用 `adapters/fake.py`。
 
-## 8. 结构 YAML
+## 8. 档案 YAML
 
-`data/structures/<TICKER>.yaml`，人画，机器只判定，不自动识别。
+`data/tickers/<TICKER>.yaml`，一只股票一个文件。人写，机器只读；结构人画，机器只判定，不自动识别。
 
 - `zones`（support / resistance 区间）、`lines`（trendline / neckline / flag_pole / flag_upper / flag_lower，两点定线）。
 - 按 `confirmed_at ≤ session_date` 载入；`status: proposed` 不载入；多余键（strength、note…）忽略。
 - `absent: [{kind, confirmed_at}]`：人确认不存在的结构（zone / trendline / neckline / flag）→ 相关工具返回 False（不适用），而不是 None（请标注）。
+- **结构按类过期**：zone / trendline / neckline / flag（含该类的 absent）中最旧的条目超过 20 个交易日（`dossier.STRUCTURE_TTL`），整类不载入，记入 `Snapshot.expired`；相关工具提问「已过期，请复核」，报告头列出过期的类。
 - 每种旗形线只能有一条，多条 → MANUAL。
 - 顶层 `exchange:`：人确认的交易所代码，只在取不到当天基本面时补上（历史回放）。
-- 不自动判过期：报告头列出最新 `confirmed_at`、距今交易日数与 absent。
+- `facts: {key: {value, at}}`：人的回答，按 `at ≤ session_date` 载入为 `Snapshot.facts`；`idea: {reason, source, at}` 载入为 `idea.reason` / `idea.source`。目前尚无规则读取（Phase 2 ②③）。
 
 ## 9. 边界
 

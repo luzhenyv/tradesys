@@ -1,12 +1,12 @@
 # Phase 2 — 从「一次判断」到「一只股票的档案」
 
-> 状态：⓪ 已完成，① 起待实施（2026-10-02）。
+> 状态：⓪ ① 已完成，② 起待实施（2026-10-02）。
 > 目标：实现 `docs/WORKFLOW.md`。10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，最终得到「计划可执行 / 暂停 / 过期」的结论。
 > 约束：遵守 `CLAUDE.md`。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。每步在同一提交里更新受影响的文档（DESIGN、WORKFLOW、README、playbook）。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-**预算**：包现为 2166 行（上限约 2200）。删除（⑦）要抵消新增（②④），目标净增约 0。
+**预算**：包现为 2202 行（上限约 2200；① 后）。删除（⑦，约 −70）要抵消新增（②④），目标净增约 0。
 
 ## 已定决策（2026-10-02）
 
@@ -31,13 +31,19 @@
 - phase-1 压缩为结果摘要；CLAUDE 增加「archive 只读」「文档描述现状」。
 - 顺带删除死代码：`rsi_below` 工具（无规则使用）、`kind: todo`（playbook 未使用）。
 
-## ① 档案文件
+## ① 档案文件 ✅（2026-10-02）
 
-- `data/structures/<TICKER>.yaml` → `data/tickers/<TICKER>.yaml`，新增 `idea`、`facts`、`plans`（格式见 WORKFLOW §3）。
-- `adapters/structures.py` 读整份档案；`Snapshot` 新增 `idea`、`facts`；`plans` 转为 Candidate（见 ④）。
-- 结构过期：`confirmed_at` 起超过 20 个交易日的条目不载入；`sources` 列出过期条目，相关工具因此返回「请标注」，提问中注明「已过期，请复核」。报告头的结构信息行改为列出过期条目。
-- 迁移 `AMD.yaml`；结构相关测试改路径。
-- 概念账：文件改名扩充，不新增概念。
+- `data/structures/` → `data/tickers/`；`adapters/structures.py` → `adapters/dossier.py`（`load()` 返回 `Dossier`）；`yahoo.attach_structures` → `attach_dossier`。
+- 载入 `facts`（`at ≤ session_date`），`Snapshot.facts: dict[str, Fact]`；`serialize` 支持 dict。
+- 结构过期（DESIGN §8）：按类（zone / trendline / neckline / flag，含 absent）判断，一类中最旧条目超过 20 个交易日 → 整类不载入，记入 `Snapshot.expired`；工具提问「已过期，请复核」，报告头列出过期的类，`sources` 加 `expired=…`。
+- 测试：`tests/unit/test_dossier.py`（回答载入、按类过期、AMD 档案过期前后、JSON 往返）。
+- 与原计划的差异：
+  - `idea` 不另设字段，载入为回答 `idea.reason` / `idea.source`（③ 的 I01 直接用 `fact` 读）。
+  - 按类而不是按条过期：避免新旧结构混在一起判断（比如过期的支撑不载入，V12 却误判「悬空」）。
+  - `Snapshot.structures_confirmed` 由 `expired` 取代。
+  - `plans` 留到 ④ 载入。
+- 实跑影响：`AMD.yaml` 于 08-20 确认，至 10-01 已超过 20 个交易日，全部结构过期，需人复核后更新 `confirmed_at`。
+- 概念账：+ `Fact`（即 ② 的「人工回答」，提前定义）；− `structures_confirmed`；`Structures` 改名 `Dossier`。
 
 ## ② 人工回答工具
 
