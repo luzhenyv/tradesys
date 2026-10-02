@@ -59,4 +59,5 @@ tradesys/report.py  Markdown 备忘录
 tradesys/adapters/  取数（yahoo）与档案 YAML 读取
 data/tickers/       档案：一只股票一个 YAML
 tests/unit/         测试（规则案例通过真实 playbook 运行）
+scripts/            调试与运维（不进包）；临时稿 scripts/local/
 ```

@@ -9,3 +9,6 @@ docs/sources/*
 
 # 交易日志（只在本地，docs/WORKFLOW.md §5）
 data/journal/
+
+# 临时调试稿
+scripts/local/
