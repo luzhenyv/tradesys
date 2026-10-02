@@ -47,12 +47,10 @@ def bars_from_history(ticker: str, df) -> Bars:
     )
 
 
-def pick_expiry(expiries: tuple[str, ...], after: date, kind: str = "monthly") -> date | None:
-    """session_date 之后最近的到期日；monthly 只取每月第三个周五。"""
+def pick_expiry(expiries: tuple[str, ...], after: date) -> date | None:
+    """session_date 之后最近的月度到期日（每月第三个周五）。"""
     days = [date.fromisoformat(e) for e in expiries]
-    return min(
-        (d for d in days if d > after and (kind == "weekly" or is_monthly_opex(d))), default=None
-    )
+    return min((d for d in days if d > after and is_monthly_opex(d)), default=None)
 
 
 def chain_from_frames(
@@ -69,9 +67,7 @@ def chain_from_frames(
     return Chain(ticker, expiry, as_of, quotes)
 
 
-def fetch_snapshot(
-    ticker: str, as_of: datetime, expiry: str = "monthly", now: datetime | None = None
-) -> Snapshot:
+def fetch_snapshot(ticker: str, as_of: datetime, now: datetime | None = None) -> Snapshot:
     current = to_et(now or now_utc())
     local = to_et(as_of)
     if local > current:
@@ -95,9 +91,7 @@ def fetch_snapshot(
         (d for d in (t.calendar or {}).get("Earnings Date", []) if d >= session), default=None
     )
     chain, options = None, "options=none（已有新的交易时段）"
-    if not session_open_since(session, current) and (
-        exp := pick_expiry(t.options, session, expiry)
-    ):
+    if not session_open_since(session, current) and (exp := pick_expiry(t.options, session)):
         oc = t.option_chain(exp.isoformat())
         chain = chain_from_frames(
             ticker, exp, as_of, oc.calls, oc.puts, bars.upto(session).last.close
@@ -131,6 +125,7 @@ def attach_dossier(snap: Snapshot, root: Path = DEFAULT_ROOT) -> Snapshot:
         absent=st.absent,
         expired=st.expired,
         facts=st.facts,
+        plans=st.plans,
         fundamental=fund,
         sources=(*snap.sources, *tags),
     )

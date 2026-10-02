@@ -164,7 +164,7 @@ def test_cli_fetch_time_options(monkeypatch):
 
     recorded = {}
 
-    def fake_fetch_snapshot(ticker, when, expiry):
+    def fake_fetch_snapshot(ticker, when):
         recorded["ticker"] = ticker
         recorded["when"] = when
         bars = make_bars([100.0])

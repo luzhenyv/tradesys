@@ -43,6 +43,17 @@ def verdict(out: RunOutput, c: Candidate) -> str:
     return "否决" if vetoes else "待确认" if unknown else "存活"
 
 
+def plan_state(out: RunOutput, c: Candidate) -> str:
+    """过期 / 暂停 / 可执行。过期与暂停不存档，由当次运行计算。"""
+    snap = out.snapshot
+    if c.expires is not None and snap is not None and snap.session_date > c.expires:
+        return "过期"
+    vetoes, unknown = blockers(out, c)
+    if vetoes or unknown:
+        return "暂停"
+    return "可执行"
+
+
 def conclusion(out: RunOutput) -> str:
     """不知道等于不买：只有全部 decide 规则可判定且未否决的候选才是买点。"""
     context_veto = any(
@@ -76,9 +87,13 @@ def _line(r: RuleResult) -> str:
 
 
 def _cand_block(out: RunOutput, c: Candidate) -> list[str]:
-    tag = verdict(out, c) if _setup_trust(out, c.setup_id) == "decide" else "参考"
+    if c.expires is not None:
+        tag, who = plan_state(out, c), c.id
+    else:
+        tag = verdict(out, c) if _setup_trust(out, c.setup_id) == "decide" else "参考"
+        who = f"{c.setup_id} · grade {c.grade}"
     rows = [r for r in out.results if r.candidate_id == c.id and r.status != RuleStatus.PASS]
-    return [f"### {c.setup_id} · grade {c.grade}（{tag}）", f"- {_price(c)}", *map(_line, rows)]
+    return [f"### {who}（{tag}）", f"- {_price(c)}", *map(_line, rows)]
 
 
 def _header(out: RunOutput) -> list[str]:
@@ -97,29 +112,6 @@ def _header(out: RunOutput) -> list[str]:
     st += [f"absent: {', '.join(snap.absent)}"] if snap.absent else []
     st += [] if st or snap.zones or snap.lines else ["无档案结构"]
     return [*lines, "", " · ".join(data), "结构：" + " · ".join(st or ["有效"]), ""]
-
-
-def _coverage(out: RunOutput) -> list[str]:
-    """过渡章节：每条规则当前的实现与可判定程度。"""
-    groups: dict[str, list[str]] = {}
-    seen: set[str] = set()
-    for r in out.results:
-        if r.rule_id in seen or r.kind == "advice":
-            continue
-        seen.add(r.rule_id)
-        same = [x for x in out.results if x.rule_id == r.rule_id]
-        if any(x.status in UNKNOWN for x in same):
-            key = "不可判定"
-        else:
-            key = "判定" if r.trust == "decide" else "近似"
-        groups.setdefault(key, []).append(r.rule_id)
-    lines = ["## 规则覆盖（过渡）", ""]
-    for key in ("判定", "近似", "不可判定"):
-        ids = groups.get(key, [])
-        lines.append(f"- {key} {len(ids)}：{' '.join(ids) or '—'}")
-    if out.idle:
-        lines.append(f"- 候选规则 {len(out.idle)}（无候选，未运行）：{' '.join(out.idle)}")
-    return [*lines, ""]
 
 
 def render(out: RunOutput) -> str:
@@ -159,7 +151,6 @@ def render(out: RunOutput) -> str:
             parts += _cand_block(out, c)
         parts.append("")
 
-    parts += _coverage(out)
     advice = [r for r in out.results if r.kind == "advice" and r.status == RuleStatus.WARN]
     parts += ["## 提醒", "", *(f"- {'；'.join(r.evidence)}" for r in advice), ""]
     return "\n".join(parts).rstrip() + "\n"

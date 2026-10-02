@@ -18,14 +18,14 @@
 
 ```bash
 uv sync
-uv run tradesys fetch AMD | uv run tradesys run playbooks/technical.md | uv run tradesys report playbooks/technical.md
+uv run tradesys fetch AMD | uv run tradesys run playbooks/technical.md | uv run tradesys report
 ```
 
 | 命令 | 作用 |
 | --- | --- |
 | `tradesys fetch AMD [--as-of 2026-10-01T17:00 --tz America/New_York]` | 取数 → Snapshot JSON（唯一的网络 I/O） |
 | `tradesys run PLAYBOOK < snap.json` | 运行全部规则 → RunOutput JSON |
-| `tradesys report PLAYBOOK < run.json` | Markdown 备忘录（也可直接读 Snapshot） |
+| `tradesys report < run.json` | Markdown 备忘录 |
 | `tradesys tool new_low --arg n=20 < snap.json` | 单独运行一个工具 → Check JSON |
 | `tradesys tools` | 列出全部工具 |
 

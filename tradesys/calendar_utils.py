@@ -108,6 +108,13 @@ def next_trading_day(d: date) -> date:
     return n
 
 
+def add_trading_days(d: date, n: int) -> date:
+    """d 之后第 n 个交易日。"""
+    for _ in range(n):
+        d = next_trading_day(d)
+    return d
+
+
 def session_open_since(session: date, now: datetime) -> bool:
     """session 收盘之后，到 now 为止是否已有新的常规时段开盘（下一交易日 9:30 ET）。"""
     return to_et(now) >= datetime.combine(next_trading_day(session), MARKET_OPEN, tzinfo=ET)

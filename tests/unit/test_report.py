@@ -5,8 +5,8 @@ from datetime import date
 from pathlib import Path
 
 from tradesys.adapters.fake import fake_snapshot, make_bars, make_chain
-from tradesys.models import Fact, Fundamental, RuleStatus, Zone
-from tradesys.report import conclusion, render, verdict
+from tradesys.models import Candidate, Fact, Fundamental, RuleStatus, RunOutput, Zone
+from tradesys.report import conclusion, plan_state, render, verdict
 from tradesys.run import run
 
 PLAYBOOK = Path(__file__).parents[2] / "playbooks" / "technical.md"
@@ -25,17 +25,15 @@ def test_context_veto_is_do_not_buy():
     assert "V01" in md
 
 
-def test_no_setup_is_no_buy_point_and_lists_coverage():
+def test_no_setup_is_no_buy_point():
     out = run(PLAYBOOK, CHOP)
     assert conclusion(out) == "不买 · 无买点"
     md = render(out)
     assert "**不买 · 无买点**" in md
     assert "## 待确认" in md and "（阻断）" in md
     assert "结构：无档案结构" in md
-    assert "候选规则 4（无候选，未运行）：V05 V12 V13 V14" in md
     assert "请在 YAML 中标注结构" in md
     assert "## 未能评估的买点（不阻断）" in md
-    assert "## 规则覆盖（过渡）" in md
     assert "请回答 v06.sector_top_loser（阻断）" in md
 
 
@@ -132,14 +130,14 @@ def test_report_warn_and_advice_and_band68():
     assert "下次财报 2026-03-01" in md
 
 
-def test_cli_report_from_snapshot():
+def test_cli_report_from_run_output():
     from typer.testing import CliRunner
 
     from tradesys.cli import app
     from tradesys.serialize import to_json
 
     runner = CliRunner()
-    result = runner.invoke(app, ["report", str(PLAYBOOK)], input=to_json(CHOP))
+    result = runner.invoke(app, ["report"], input=to_json(run(PLAYBOOK, CHOP)))
     assert result.exit_code == 0
     assert "# TEST ·" in result.stdout
     assert "**不买 · 无买点**" in result.stdout
@@ -180,3 +178,35 @@ def test_unanswered_question_blocks_buy_until_answered():
     assert conclusion(out) == "不买 · 待确认 1 项"
     assert "请回答 v09.tracked（阻断）" in render(out)
     assert conclusion(run(PLAYBOOK, _s01_snap(facts=CLEAN, **kw))) == "买（long）"
+
+
+def test_plan_expires_the_session_after_expires():
+    snap = fake_snapshot(make_bars([125.0] * 5))
+    live = Candidate("p1", "", 125.0, 119.0, 140.0, "", expires=snap.session_date)
+    dead = Candidate("p1", "", 125.0, 119.0, 140.0, "", expires=date(2026, 1, 8))
+    assert plan_state(RunOutput((), (live,), snap), live) == "可执行"
+    assert plan_state(RunOutput((), (dead,), snap), dead) == "过期"
+
+
+def _plan_snap(entry, stop, target):
+    plan = Candidate("p1", "", entry, stop, target, "", expires=date(2026, 2, 20))
+    return fake_snapshot(
+        make_bars([125.0] * 14),
+        zones=(Zone("z-100-120", "support", 100.0, 120.0),),
+        absent=("trendline", "neckline", "flag"),
+        fundamental=Fundamental(1e11, "NMS", None),
+        next_earnings=date(2026, 6, 1),
+        facts=CLEAN,
+        plans=(plan,),
+    )
+
+
+def test_plan_paused_by_v12_and_resumes_when_near_support():
+    far = run(PLAYBOOK, _plan_snap(140.0, 130.0, 155.0))
+    (p,) = [c for c in far.candidates if c.id == "p1"]
+    assert plan_state(far, p) == "暂停"
+    assert "（暂停）" in render(far)
+    near = run(PLAYBOOK, _plan_snap(125.0, 119.0, 140.0))
+    (p,) = [c for c in near.candidates if c.id == "p1"]
+    assert plan_state(near, p) == "可执行"
+    assert "（可执行）" in render(near)

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from tradesys.calendar_utils import next_trading_day, trading_days_between
-from tradesys.models import Fact, Line, Zone
+from tradesys.calendar_utils import add_trading_days, next_trading_day, trading_days_between
+from tradesys.models import Candidate, Fact, Line, Zone
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2] / "data" / "tickers"
 KEYS = ("zones", "lines", "absent")
@@ -50,6 +50,30 @@ def _facts(data: dict, cutoff: date) -> dict[str, Fact]:
     }
 
 
+def _plans(data: dict, cutoff: date) -> tuple[Candidate, ...]:
+    out = []
+    for raw in data.get("plans") or []:
+        if raw.get("status") == "cancelled" or "at" not in raw:
+            continue
+        at = _as_date(raw["at"])
+        if at > cutoff:
+            continue
+        expires = _as_date(raw["expires"]) if raw.get("expires") else add_trading_days(at, 20)
+        stop, target = raw.get("stop"), raw.get("target")
+        out.append(
+            Candidate(
+                str(raw["id"]),
+                "",
+                float(raw["entry"]),
+                None if stop is None else float(stop),
+                None if target is None else float(target),
+                "",
+                expires=expires,
+            )
+        )
+    return tuple(out)
+
+
 @dataclass(frozen=True)
 class Dossier:
     zones: tuple[Zone, ...] = ()
@@ -58,6 +82,7 @@ class Dossier:
     expired: tuple[str, ...] = ()  # 过期的结构类
     exchange: str | None = None  # 人工确认的交易所代码，供历史回放
     facts: dict[str, Fact] = field(default_factory=dict)
+    plans: tuple[Candidate, ...] = ()
 
 
 def load(ticker: str, session_date: date, root: Path = DEFAULT_ROOT) -> Dossier:
@@ -89,4 +114,6 @@ def load(ticker: str, session_date: date, root: Path = DEFAULT_ROOT) -> Dossier:
     )
     absent = tuple(str(r["kind"]) for r in kept["absent"])
     exchange = str(data["exchange"]) if data.get("exchange") else None
-    return Dossier(zones, lines, absent, expired, exchange, _facts(data, cutoff))
+    return Dossier(
+        zones, lines, absent, expired, exchange, _facts(data, cutoff), _plans(data, cutoff)
+    )

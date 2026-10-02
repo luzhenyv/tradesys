@@ -199,17 +199,15 @@ def run(playbook: str | Path, snap: Snapshot, candidates: tuple[Candidate, ...] 
             results.append(rr)
             if cand:
                 produced.append(cand)
-    all_cands = candidates + tuple(produced)
+    all_cands = candidates + snap.plans + tuple(produced)
     ids = [c.id for c in all_cands]
     if len(ids) != len(set(ids)):
         raise ValueError(f"候选 id 重复：{sorted(i for i in set(ids) if ids.count(i) > 1)}")
-    idle: list[str] = []
     for rule in rules:
         if rule.blocks[0].get("kind") == "setup":
             continue
         if rule.blocks[0].get("scope") == "candidate":
             results += [evaluate(rule, snap, c) for c in all_cands]
-            idle += [] if all_cands else [rule.id]
         else:
             results.append(evaluate(rule, snap))
-    return RunOutput(tuple(results), all_cands, snap, tuple(idle))
+    return RunOutput(tuple(results), all_cands, snap)

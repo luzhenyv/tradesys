@@ -21,12 +21,12 @@ tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 
 | 对象 | 内容 |
 | --- | --- |
-| `Snapshot` | 一只股票在 as_of 时点的全部输入：bars（截至 session_date）、zones、lines、absent、expired、facts、fundamental、next_earnings、chain、sources |
+| `Snapshot` | 一只股票在 as_of 时点的全部输入：bars（截至 session_date）、zones、lines、absent、expired、facts、plans、fundamental、next_earnings、chain、sources |
 | `Fact` | 人的回答：value（布尔、数字或文本）、at（回答日期） |
-| `Candidate` | 候选买点：entry、stop、target、grade、evidence；`rr` 为计算属性 |
+| `Candidate` | 候选买点：entry、stop、target、grade、evidence；计划另有 `expires`、`status`；`rr` 为计算属性 |
 | `Check` | 工具输出：`hit`（True / False / None）、evidence、`review`（近似算法）、`missing`（缺数据）、`value`（setup 取价）、`grade` |
 | `RuleResult` | 规则结果：rule_id、title、status、evidence、candidate_id、review、trust、kind |
-| `RunOutput` | results、candidates（setup 产出 + CLI 注入）、snapshot、idle（无候选而未运行的候选规则） |
+| `RunOutput` | results、candidates（setup 产出 + 档案 plans）、snapshot |
 
 `RuleStatus`：`PASS / VETO / WARN / MANUAL`（无法判断）/ `UNAVAILABLE`（缺数据）。
 
@@ -99,6 +99,7 @@ ask: 提问               # 可选：块未知时放在 evidence 首位
 - 每种旗形线只能有一条，多条 → MANUAL。
 - 顶层 `exchange:`：人确认的交易所代码，只在取不到当天基本面时补上（历史回放）。
 - `facts: {key: {value, at}}`：人的回答，载入为 `Snapshot.facts`；`idea: {reason, source, at}` 载入为 `idea.reason` / `idea.source`。
+- `plans`：人写的买点，载入为 `Candidate` 挂到 `Snapshot.plans`，与 setup 产出走同一组候选规则。`cancelled` 不载入；`expires` 省略 = `at` + 20 个交易日。`status` 只存 `active` / `cancelled`；「暂停」「过期」由报告计算（过期 = `session_date > expires`；暂停 = 该计划有 decide 的 VETO 或未知 veto，含上下文规则）。
 - 回答由两个工具读取（`tools/answer.py`）：
   - `fact: {key, is | min | max, ttl}`：回答满足条件 → True；不给条件时只要求已回答（有 → False）。
   - `checklist: {keys, min, ttl}`：为「是」的项数 < min → True。

@@ -3,7 +3,6 @@
 Snapshot 从 stdin 读入，结果以 JSON 写到 stdout，可用管道串联，也可被 agent 直接调用。
 """
 
-import json
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -15,22 +14,14 @@ from tradesys.calendar_utils import parse_as_of
 from tradesys.models import Candidate, RunOutput, Snapshot
 from tradesys.report import render
 from tradesys.run import run as run_playbook
-from tradesys.serialize import from_json, from_plain, to_json
+from tradesys.serialize import from_json, to_json
 from tradesys.tools import TOOLS, call
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
-Candidates = Annotated[Path | None, typer.Option(help="候选买点 JSON 文件（列表）")]
-
 
 def _snapshot() -> Snapshot:
     return from_json(Snapshot, sys.stdin.read())
-
-
-def _candidates(path: Path | None) -> tuple[Candidate, ...]:
-    if path is None:
-        return ()
-    return from_plain(tuple[Candidate, ...], yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @app.command()
@@ -53,13 +44,12 @@ def fetch(
             help="as_of 的时区，如 UTC、Asia/Shanghai、America/New_York；默认 UTC",
         ),
     ] = "UTC",
-    expiry: Annotated[str, typer.Option(help="期权到期日：monthly | weekly")] = "monthly",
 ) -> None:
     """取数：输出 Snapshot JSON（唯一的网络 I/O）。"""
     from tradesys.adapters.yahoo import fetch_snapshot  # 只有 fetch 需要加载 yfinance
 
     when = parse_as_of(as_of, tz)
-    typer.echo(to_json(fetch_snapshot(ticker.upper(), when, expiry)))
+    typer.echo(to_json(fetch_snapshot(ticker.upper(), when)))
 
 
 @app.command()
@@ -82,21 +72,17 @@ def tool(
 
 
 @app.command()
-def run(playbook: Path, candidates: Candidates = None) -> None:
+def run(playbook: Path) -> None:
     """运行整份 playbook：stdin 读 Snapshot JSON，stdout 输出 RunOutput JSON。"""
-    typer.echo(to_json(run_playbook(playbook, _snapshot(), _candidates(candidates))))
+    typer.echo(to_json(run_playbook(playbook, _snapshot())))
 
 
 @app.command()
-def report(playbook: Path) -> None:
-    """Markdown 备忘录。stdin 为 Snapshot JSON 或 RunOutput JSON。"""
-    data = json.loads(sys.stdin.read())
-    if isinstance(data, dict) and "results" in data:
-        out = from_plain(RunOutput, data)
-        if out.snapshot is None:
-            raise typer.BadParameter("RunOutput 无 snapshot，请把 Snapshot JSON 交给 report")
-    else:
-        out = run_playbook(playbook, from_plain(Snapshot, data))
+def report() -> None:
+    """Markdown 备忘录。stdin 读 RunOutput JSON。"""
+    out = from_json(RunOutput, sys.stdin.read())
+    if out.snapshot is None:
+        raise typer.BadParameter("RunOutput 无 snapshot")
     typer.echo(render(out))
 
 

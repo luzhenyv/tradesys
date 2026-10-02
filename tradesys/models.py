@@ -125,6 +125,7 @@ class Snapshot:
     absent: tuple[str, ...] = ()  # 人已确认不存在的结构：zone / trendline / neckline / flag
     expired: tuple[str, ...] = ()  # 过期而未载入的结构类，需人复核
     facts: dict[str, Fact] = field(default_factory=dict)  # 人的回答，含 idea.reason / idea.source
+    plans: tuple[Candidate, ...] = ()  # 档案中的计划（cancelled 已过滤）
     fundamental: Fundamental | None = None
     next_earnings: date | None = None
     chain: Chain | None = None
@@ -140,6 +141,8 @@ class Candidate:
     target: float | None
     grade: str
     evidence: tuple[str, ...] = ()
+    expires: date | None = None  # setup 产出不填；计划默认 at+20 个交易日
+    status: str = "active"  # YAML：active | cancelled；暂停 / 过期由报告计算
 
     @property
     def rr(self) -> float | None:
@@ -190,4 +193,3 @@ class RunOutput:
     results: tuple[RuleResult, ...]
     candidates: tuple[Candidate, ...] = ()
     snapshot: Snapshot | None = None
-    idle: tuple[str, ...] = ()  # 无候选而未运行的 scope: candidate 规则

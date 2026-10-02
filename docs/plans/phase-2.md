@@ -1,12 +1,12 @@
 # Phase 2 — 从「一次判断」到「一只股票的档案」
 
-> 状态：⓪–③ 已完成，④ 起待实施（2026-10-02）。
+> 状态：⓪–④ 已完成，⑤ 起待实施（2026-10-02）。
 > 目标：实现 `docs/WORKFLOW.md`。10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，最终得到「计划可执行 / 暂停 / 过期」的结论。
 > 约束：遵守 `CLAUDE.md`。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。每步在同一提交里更新受影响的文档（DESIGN、WORKFLOW、README、playbook）。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-**预算**：包现为 2248 行（③ 后，**超出约 50**；上限约 2200）。⑦ 删约 70 行后须回到预算内；④ 新增前先做 ⑦ 中与 ④ 无关的删除。
+**预算**：包现为 2254 行（④ 后，**超出约 50**；上限约 2200）。⑦ 余下「结论分支」留给 ⑤；其余已在 ④ 删除。
 
 ## 已定决策（2026-10-02）
 
@@ -90,13 +90,14 @@ V09 清单（每项布尔，可在 playbook 中增删）：
 - 文档：DESIGN 去掉 `kind: manual` / `trust: memo`；README 补想法（I）。
 - 概念账：− manual、− memo。包 2248 行。
 
-## ④ 计划生命周期
+## ④ 计划生命周期 ✅（2026-10-02）
 
-- `Candidate` 新增 `expires: date | None`、`status: str = "active"`（setup 产出的候选不填）。
-- 档案中的 `plans` → Candidate 注入运行；`cancelled` 不进入运行；`expires` 省略 = `at` + 20 个交易日。
-- 「暂停」「过期」由报告计算，不存储：过期 = `session_date > expires`；暂停 = 该计划存在 decide 的 VETO 或未知（含上下文规则）。
-- 测试：过期边界；V12 否决 → 暂停；否决解除 → 恢复可执行。
-- 概念账：计划 = Candidate + 两个字段。
+- `Candidate` 新增 `expires: date | None`、`status: str = "active"`（setup 产出不填）。
+- 档案 `plans` 载入为 Candidate，挂 `Snapshot.plans`；`run` 与 setup 产出合并。`cancelled` / 无 `at` / `at` 晚于 cutoff 不载入；`expires` 省略 = `at` + 20 个交易日。
+- 「暂停」「过期」由 `report.plan_state` 计算，不存储：过期 = `session_date > expires`；暂停 = 该计划存在 decide 的 VETO 或未知 veto（含上下文规则）。
+- 测试：过期边界；省略 expires = at+20；cancelled 不载入；V12 否决 → 暂停，靠近支撑 → 可执行。
+- 同一提交做了 ⑦ 中与 ④ 无关的删除：规则覆盖 / `idle`、`report` 只读 RunOutput、CLI `--candidates`、`fetch --expiry weekly`。
+- 概念账：计划 = Candidate + 两个字段；`Snapshot.plans` 为管道载体。包 2254 行。
 
 ## ⑤ 报告：档案视图
 
@@ -114,12 +115,12 @@ V09 清单（每项布尔，可在 playbook 中增删）：
 
 | 删除 | 原因 | 估计 |
 | --- | --- | --- |
-| `kind: manual`、`trust: memo`、`block_trust` 的分支 | ③ 用普通块 + `fact` 取代 | −15 |
-| 报告「规则覆盖」章节、`RunOutput.idle` | 开发者视角；RunOutput JSON 已含全部信息 | −30 |
+| `kind: manual`、`trust: memo`、`block_trust` 的分支 | ③ 已删 | −15 |
+| 报告「规则覆盖」章节、`RunOutput.idle` | ④ 已删 | −30 |
 | 报告的结论分支（`verdict` / `blockers` / 四种 headline） | ⑤ 以计划状态取代 | 约 0（重写） |
-| `report` 读 Snapshot 再内部 run 的路径，以及 `report` 的 PLAYBOOK 参数 | 管道 `run \| report` 已覆盖；`report` 只读 RunOutput | −10 |
-| `run --candidates` | 档案中的 `plans` 是候选的唯一外部入口；调试用 `tool --candidate` | −8 |
-| `fetch --expiry weekly` 与 `pick_expiry` 的 kind 参数 | 无规则使用；P-BAND68 固定为月度到期 | −5 |
+| `report` 读 Snapshot 再内部 run 的路径，以及 `report` 的 PLAYBOOK 参数 | ④ 已删；`report` 只读 RunOutput | −10 |
+| `run --candidates` | ④ 已删；档案 `plans` 是候选的唯一外部入口 | −8 |
+| `fetch --expiry weekly` 与 `pick_expiry` 的 kind 参数 | ④ 已删 | −5 |
 
 保留（考虑过，不删）：
 - setup 块的「None 优先」：缺结构时提示请标注，而不是静默跳过。

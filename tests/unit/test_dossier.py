@@ -5,7 +5,8 @@ from datetime import date
 from tradesys.adapters.dossier import Dossier, load
 from tradesys.adapters.fake import fake_snapshot, make_bars
 from tradesys.adapters.yahoo import attach_dossier
-from tradesys.models import Fact, Fundamental, Line, Snapshot, Zone
+from tradesys.calendar_utils import add_trading_days
+from tradesys.models import Candidate, Fact, Fundamental, Line, Snapshot, Zone
 from tradesys.serialize import from_json, to_json
 from tradesys.tools.structure import zone_broken_within
 
@@ -162,3 +163,39 @@ zones:
     d = _load(tmp_path, text, date(2026, 1, 16))
     assert set(d.facts) == {"sat", "tue"}
     assert len(d.zones) == 1
+
+
+def test_omitted_plan_expires_is_at_plus_20_trading_days():
+    assert add_trading_days(date(2026, 10, 1), 20) == date(2026, 10, 29)
+
+
+def test_plans_skip_cancelled_and_future_and_default_expires(tmp_path):
+    text = """
+plans:
+  - {id: p1, entry: 520, stop: 500, target: 600, at: 2026-01-16}
+  - {id: p2, entry: 1, stop: 1, target: 2, at: 2026-01-16, status: cancelled}
+  - {id: p3, entry: 2, stop: 1, target: 3, at: 2026-02-01}
+  - {id: p4, entry: 3, at: 2026-01-16, expires: 2026-01-20}
+"""
+    d = _load(tmp_path, text, date(2026, 1, 20))
+    assert [c.id for c in d.plans] == ["p1", "p4"]
+    p1, p4 = d.plans
+    assert (p1.entry, p1.stop, p1.target) == (520.0, 500.0, 600.0)
+    assert p1.expires == add_trading_days(date(2026, 1, 16), 20)
+    assert p4.expires == date(2026, 1, 20) and p4.stop is None
+    assert p1.setup_id == "" and p1.grade == ""
+
+
+def test_attach_dossier_carries_plans(tmp_path):
+    (tmp_path / "TEST.yaml").write_text(
+        "plans:\n  - {id: p1, entry: 10, stop: 9, target: 12, at: 2026-01-16}\n",
+        encoding="utf-8",
+    )
+    snap = attach_dossier(fake_snapshot(make_bars([100.0] * 10)), tmp_path)
+    assert [c.id for c in snap.plans] == ["p1"]
+
+
+def test_snapshot_with_plans_round_trips_through_json():
+    plan = Candidate("p1", "", 10.0, 9.0, 12.0, "", expires=date(2026, 2, 13))
+    snap = fake_snapshot(make_bars([100.0]), plans=(plan,))
+    assert from_json(Snapshot, to_json(snap)) == snap

@@ -85,7 +85,7 @@ for f in data/tickers/*.yaml; do
   t=$(basename "$f" .yaml)
   tradesys fetch "$t" | tradesys run playbooks/technical.md \
     | tee >(jq -c 'del(.snapshot.bars)' >> "data/journal/$t.jsonl") \
-    | tradesys report playbooks/technical.md
+    | tradesys report
 done
 ```
 

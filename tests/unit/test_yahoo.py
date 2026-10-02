@@ -41,12 +41,6 @@ def test_pick_expiry_monthly_is_next_third_friday_after_session():
     assert pick_expiry(expiries, date(2026, 10, 16)) == date(2026, 11, 20)
 
 
-def test_pick_expiry_weekly_is_next_expiry():
-    assert pick_expiry(("2026-10-02", "2026-10-09"), date(2026, 10, 1), "weekly") == date(
-        2026, 10, 2
-    )
-
-
 def test_chain_keeps_strikes_near_close_and_feeds_band68():
     calls = pd.DataFrame(
         {"strike": [100.0, 165.0, 300.0], "bid": [0, 6.1, 0], "ask": [70, 6.30, 0]}
