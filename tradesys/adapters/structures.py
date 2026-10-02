@@ -40,7 +40,7 @@ class Structures:
     lines: tuple[Line, ...] = ()
     absent: tuple[str, ...] = ()
     confirmed: date | None = None  # 已载入条目中最新的 confirmed_at
-    exchange: str | None = None  # 人工确认的交易所代码，供历史回放（DESIGN §6）
+    exchange: str | None = None  # 人工确认的交易所代码，供历史回放（DESIGN §8）
 
 
 def load(ticker: str, session_date: date, root: Path = DEFAULT_ROOT) -> Structures:

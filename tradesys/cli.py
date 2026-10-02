@@ -1,4 +1,4 @@
-"""CLI 薄壳（DESIGN §7）：只做参数解析与 JSON 进出，不含逻辑。
+"""CLI 薄壳（命令见 README）：只做参数解析与 JSON 进出，不含逻辑。
 
 Snapshot 从 stdin 读入，结果以 JSON 写到 stdout，可用管道串联，也可被 agent 直接调用。
 """

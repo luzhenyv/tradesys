@@ -4,4 +4,8 @@ uv.lock
 __pycache__/
 .pytest_cache/
 .ruff_cache/
-docs/sources/
+docs/sources/*
+!docs/sources/README.md
+
+# 交易日志（只在本地，docs/WORKFLOW.md §5）
+data/journal/

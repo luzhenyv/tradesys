@@ -1,4 +1,4 @@
-"""工具之间的通用接口（DESIGN §3）：frozen dataclass ⇄ JSON。
+"""工具之间的通用接口（DESIGN §2）：frozen dataclass ⇄ JSON。
 
 to_json 输出纯 JSON；from_json 按 dataclass 的类型注解还原。
 """

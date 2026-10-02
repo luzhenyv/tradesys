@@ -1,90 +1,137 @@
 # Phase 2 — 从「一次判断」到「一只股票的档案」
 
-> 状态：草案，待 review（2026-10-02）。
-> 目标：走通 `docs/WORKFLOW.md` 的场景——10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，就能得到「计划可执行 / 暂停 / 过期」的结论。
-> 约束：遵守 `docs/DESIGN.md` 与 `docs/WORKFLOW.md` §0 原则。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。
+> 状态：⓪ 已完成，① 起待实施（2026-10-02）。
+> 目标：实现 `docs/WORKFLOW.md`。10-01 盘后问「AMD 明天能买吗」，系统列出待回答的问题；人只编辑档案文件、重复运行同一条管道，最终得到「计划可执行 / 暂停 / 过期」的结论。
+> 约束：遵守 `CLAUDE.md`。不新增 CLI 命令；不增加概念，除非万不得已（每步写明概念账）；工具层、取数、结构判定不动。每步在同一提交里更新受影响的文档（DESIGN、WORKFLOW、README、playbook）。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
 
-**预算**：包现为 2175 行（上限 ≈ 2200）。Phase 2 删除的代码（manual / todo / memo、规则覆盖章节、`RunOutput.idle`）要抵消新增；目标净增 ≈ 0。
+**预算**：包现为 2166 行（上限约 2200）。删除（⑦）要抵消新增（②④），目标净增约 0。
+
+## 已定决策（2026-10-02）
+
+| # | 问题 | 决定 |
+| --- | --- | --- |
+| 1 | 档案目录 | `data/structures/` → `data/tickers/` |
+| 2 | V09 清单 | 9 项（见 ③），`min: 7` |
+| 3 | 日志内容 | 只保存事后无法重新获取的数据：结论与规则结果、当次档案（回答、结构、计划）、当天才有的数据（基本面、财报日、期权报价）；日线可重新下载，不保存 |
+| 4 | 结构过期 | 以 WORKFLOW 为准：`confirmed_at` 起 20 个交易日后过期，需复核 |
+| 5 | S08 | 由 `fact` 回答，作为普通 setup |
+| 6 | 想法规则 | playbook 新增「想法」一节，`I01` |
+| 7 | 回答的值 | 支持布尔（`is`）与数字阈值（`min` / `max`） |
+| 8 | S08 止损 | 不设止损工具：V05 判「止损无法确定」。买点必须有止损，由人在计划中决定（可随时调整） |
+| 9 | 入口 | 删除 `report` 读 Snapshot 与 `run --candidates`；命令为 `tradesys report < run.json` |
+| 10 | 日志 | `data/journal/` 不进 git（已加入 `.gitignore`） |
+
+## ⓪ 文档重构 ✅（2026-10-02）
+
+- 每个主题只写在一处：README（介绍、命令、文档地图）、CLAUDE（开发守则）、DESIGN（系统设计，描述现状）、WORKFLOW（Phase 2 目标流程与档案格式）、`docs/sources/README.md`（Source ID）、playbook（交易规则）。
+- playbook 871 → 546 行：原语拆到 `playbooks/technical-primitives.md`；每条规则只留 条件 / 来源 / 案例 / rule 块；删除阅读约定中的机制说明与出处索引。rule 块逐字不变（解析结果比对），只有两处有意修改：V06 提问「T-1 日」→「T 日」（voice：「前一交易日不要去碰它」，以买入日为准）；V10 标题去掉已拆出的「社群热度」。
+- 修正与代码不符的旧描述：P-FIB「摆动点取自 YAML」、P-VOL `is_opex_friday`、P-CANDLE `PatternHit`。
+- phase-1 压缩为结果摘要；CLAUDE 增加「archive 只读」「文档描述现状」。
+- 顺带删除死代码：`rsi_below` 工具（无规则使用）、`kind: todo`（playbook 未使用）。
 
 ## ① 档案文件
 
-- `data/structures/<TICKER>.yaml` → `data/tickers/<TICKER>.yaml`，新增三段：`idea`、`facts`、`plans`（格式见 WORKFLOW §3）。
-- `adapters/structures.py` → 读整份档案；`Snapshot` 新增 `idea`、`facts`；`plans` 转为 `Candidate` 注入（见 ④）。
-- 迁移 `AMD.yaml`；结构相关的测试改路径。
+- `data/structures/<TICKER>.yaml` → `data/tickers/<TICKER>.yaml`，新增 `idea`、`facts`、`plans`（格式见 WORKFLOW §3）。
+- `adapters/structures.py` 读整份档案；`Snapshot` 新增 `idea`、`facts`；`plans` 转为 Candidate（见 ④）。
+- 结构过期：`confirmed_at` 起超过 20 个交易日的条目不载入；`sources` 列出过期条目，相关工具因此返回「请标注」，提问中注明「已过期，请复核」。报告头的结构信息行改为列出过期条目。
+- 迁移 `AMD.yaml`；结构相关测试改路径。
 - 概念账：文件改名扩充，不新增概念。
 
 ## ② 人工回答工具
 
-- `fact: {key, is, ttl}`：`facts[key].value == is` → True；缺失或过期 → None（missing=False，即提问而非缺数据）。
-- `checklist: {keys, min, ttl}`：任一 key 缺失或过期 → None，evidence 列出缺的 key；否则满足项数 < min → True（否决）。
+- `fact: {key, is | min | max, ttl}`：
+  - `is`：`value == is`；`min` / `max`：数字比较。
+  - 缺失或过期 → None（提问，不是缺数据）。
+- `checklist: {keys, min, ttl}`：任一 key 缺失或过期 → None，evidence 列出缺的 key；否则为真的项数 < min → True（否决）。
 - `ttl`：交易日数，或 `earnings`（到下次财报；无财报日按 63 个交易日）。按 `session_date` 与回答的 `at` 计算。
-- 纯函数测试：过期边界、earnings 回退、缺 key 列表。
+- 纯函数测试：过期边界、earnings 回退、缺 key 列表、数字阈值。
 - 概念账：+ 人工回答（facts）。
 
-## ③ 规则迁移：manual → veto + ask + fact
+## ③ 规则迁移：manual → 普通块 + `ask` + `fact`
 
-- 执行器：删除 `kind: manual` / `kind: todo` 与 `trust: memo`；任何块可写 `ask:`，块未知时 `ask` 作为提问文本放在 evidence 首位。`parse` 校验同步更新。
-- playbook 改写：
-  - 新增 **0. 想法** 一节，`I01 写下想法理由`：`fact` 读 `idea`，缺失 → 提问。
-  - V06、V08、V10b：`fact`，ttl 1 / 1 / 5。
-  - V07：原四个条件 + `fact: {key: v07.no_bad_news, is: false, ttl: 1}`；Kleene 保证只在其余条件成立时才提问。
-  - V09：`checklist`（WORKFLOW §5 的 9 项，`min: 7`，`ttl: earnings`）。
-  - S08：见「待确认」。
-- 测试（真实 playbook）：V09 清单 6/9 → VETO、7/9 → PASS、缺 1 项 → 提问；V07 上涨中不提问；I01 缺理由 → 提问。
-- 概念账：− manual、− todo、− memo；DESIGN §3–§4 同步。
+- 执行器：删除 `kind: manual` 与 `trust: memo`；任何块可写 `ask:`，块未知时 `ask` 作为提问放在 evidence 首位。advice 仅靠 `kind` 区分，不参与判定。
+- playbook 新增「想法」一节：`I01 写下想法理由`，`fact` 读 `idea`，缺失 → 提问。
+- 改写（有效期为默认值，写在 rule 块的 `ttl`）：
+
+| 规则 | 写法 | ttl |
+| --- | --- | --- |
+| V06 板块跌幅前 10% | `fact: {key: v06.sector_top_loser, is: true}` → VETO | 1 |
+| V07 无明显利空 | 原四个条件 + `fact: {key: v07.no_bad_news, is: false}`（Kleene：其余条件成立时才提问） | 1 |
+| V08 近期被止损 | `fact: {key: v08.stopped_out, is: true}` | 1 |
+| V09 基本面熟悉度 | `checklist`（下表 9 项，`min: 7`） | earnings |
+| V10b 社群热度异常 | `fact: {key: v10b.social_hype, is: true}` | 5 |
+| S08 板块龙头大阳 | setup：`fact: {key: s08.sector_breakout_leader, is: true}` + `green_expand`；entry 为收盘价；**不写 stop**（V05 否决，由人在计划中定止损）；target 为最近阻力 | 1 |
+
+V09 清单（每项布尔，可在 playbook 中增删）：
+
+| key | 问题 |
+| --- | --- |
+| `v09.business` | 能用一句话说清主营业务与主要收入来源 |
+| `v09.revenue_mix` | 知道最大两个业务板块的营收占比 |
+| `v09.last_earnings` | 读过最近一次财报 / 电话会要点 |
+| `v09.growth` | 知道最近 4 个季度营收与 EPS 的同比方向 |
+| `v09.margin` | 知道毛利率趋势（升 / 平 / 降） |
+| `v09.guidance` | 知道管理层最新指引 |
+| `v09.competitors` | 能说出 2 个主要竞争对手 |
+| `v09.catalyst` | 知道下一个催化剂或风险事件 |
+| `v09.tracked` | 已跟踪该公司满 3 个月 |
+
+- 测试（真实 playbook）：V09 6/9 → VETO、7/9 → PASS、缺 1 项 → 提问；V07 上涨中不提问；I01 缺理由 → 提问；S08 回答为真 → 产出无止损的建议，V05 否决。
+- 概念账：− manual、− memo。
 
 ## ④ 计划生命周期
 
 - `Candidate` 新增 `expires: date | None`、`status: str = "active"`（setup 产出的候选不填）。
-- 档案中的 `plans` → Candidate 注入运行；`status: cancelled` 不进入运行；`expires` 省略 = `at` + 20 个交易日。
-- 「暂停」「过期」由报告计算，不存储：
-  - 过期：`session_date > expires`。
-  - 暂停：该计划存在 decide 的 VETO 或未知（含上下文规则）。
+- 档案中的 `plans` → Candidate 注入运行；`cancelled` 不进入运行；`expires` 省略 = `at` + 20 个交易日。
+- 「暂停」「过期」由报告计算，不存储：过期 = `session_date > expires`；暂停 = 该计划存在 decide 的 VETO 或未知（含上下文规则）。
 - 测试：过期边界；V12 否决 → 暂停；否决解除 → 恢复可执行。
-- 概念账：计划 = Candidate + 两个字段，不新增概念。
+- 概念账：计划 = Candidate + 两个字段。
 
 ## ⑤ 报告：档案视图
 
-- 章节按 WORKFLOW §7：结论 → 待回答 → 计划 → 系统建议买点 → 提醒。
-- 结论一行，按优先级：先写想法理由 / 不买（否决原因）/ 待回答 N 项 / 审查通过，尚无计划 / 计划 p1 可执行 / 计划 p1 暂停（原因）/ 计划 p1 已过期。
-- 待回答：每项 = 规则 ID + 提问 + 需填写的 key。
-- 删除「规则覆盖」章节与 `RunOutput.idle`（RunOutput JSON 已含全部信息）。
-- 保留报告头的结构信息行（Phase 1 M2）。
+- 章节按 WORKFLOW §4：结论 → 待回答 → 计划 → 系统建议买点 → 提醒。
+- 结论一行，优先级：先写想法理由 / 不买（否决原因）/ 待回答 N 项 / 审查通过，尚无计划 / 计划 p1 可执行 / 计划 p1 暂停（原因）/ 计划 p1 已过期。
+- 待回答：规则 ID + 提问 + 要填写的 key。
 - 测试：每种结论各一例。
 
 ## ⑥ 日志
 
-- `data/journal/<TICKER>.jsonl`：每次运行追加一行，只追加不修改；不买也记。
-- 做法取决于「待确认 3」：倾向 `run --compact` 输出单行 JSON，由 shell `tee -a` 追加，不新增命令。
-- 概念账：+ 日志（只是文件，无代码概念）。
+- 按 WORKFLOW §5：`tee >(jq -c 'del(.snapshot.bars)' >> data/journal/<TICKER>.jsonl)`。RunOutput 已包含决定 3 要保存的全部内容（snapshot 里的档案、基本面、财报日、期权链），只去掉日线。
+- 不新增命令、不改代码；`data/journal/` 已加入 `.gitignore`（只在本地）。
 
-## ⑦ 场景验收
+## ⑦ 代码精简（依据 ⓪ 后的代码 review）
 
-- `tests/unit/test_workflow.py`：用 fake 行情 + 真实 playbook 走完整循环：
+| 删除 | 原因 | 估计 |
+| --- | --- | --- |
+| `kind: manual`、`trust: memo`、`block_trust` 的分支 | ③ 用普通块 + `fact` 取代 | −15 |
+| 报告「规则覆盖」章节、`RunOutput.idle` | 开发者视角；RunOutput JSON 已含全部信息 | −30 |
+| 报告的结论分支（`verdict` / `blockers` / 四种 headline） | ⑤ 以计划状态取代 | 约 0（重写） |
+| `report` 读 Snapshot 再内部 run 的路径，以及 `report` 的 PLAYBOOK 参数 | 管道 `run \| report` 已覆盖；`report` 只读 RunOutput | −10 |
+| `run --candidates` | 档案中的 `plans` 是候选的唯一外部入口；调试用 `tool --candidate` | −8 |
+| `fetch --expiry weekly` 与 `pick_expiry` 的 kind 参数 | 无规则使用；P-BAND68 固定为月度到期 | −5 |
+
+保留（考虑过，不删）：
+- setup 块的「None 优先」：缺结构时提示请标注，而不是静默跳过。
+- MANUAL 与 UNAVAILABLE 的区分：前者请人回答，后者请补数据。
+- `Fundamental.sector`：V06 提问时可以显示所属板块。
+
+## ⑧ 场景验收
+
+- `tests/unit/test_workflow.py`，用 fake 行情 + 真实 playbook 走完整循环：
   1. 只有 ticker → 「先写想法理由」。
-  2. 写入 idea → 「待回答 N 项」（V06 / V07 / V08 / V09 / V10b）。
+  2. 写入 idea → 「待回答 N 项」（V06 / V08 / V09 / V10b，V07 视行情）。
   3. 写入回答 → 「审查通过，尚无计划」，附系统建议买点。
   4. 写入 plan → 「计划 p1 可执行」。
-  5. 次日行情触发 V12 → 「计划 p1 暂停（V12 …）」；再次日 → 恢复。
+  5. 次日行情触发 V12 → 「计划 p1 暂停（V12 …）」；再次日恢复。
   6. 超过 expires → 「计划 p1 已过期」。
-- 文档：WORKFLOW 状态改为「已确认」；DESIGN 写入概念账；CLAUDE.md 入口表加入 WORKFLOW。
-- 实跑：`tradesys fetch AMD | tradesys run … | tradesys report …` 在真实档案上输出档案视图。
-
-## 待确认（review 时决定）
-
-1. **改名**：`data/structures/` → `data/tickers/`？
-2. **V09 清单**：WORKFLOW §5 的 9 项与 `min: 7`？
-3. **日志内容**：整份 RunOutput 含行情（约 50KB/行，一年约 12MB/只），还是只记结论、回答、计划与规则状态（不含 bars）？
-4. **结构过期**：Phase 1 M2 定为「只显示确认距今天数，不判过期」；WORKFLOW §4 提议 20 个交易日后过期并提问。取哪一个？
-5. **S08**（板块龙头，纯人工的买点）：manual 删除后改为 advice 提醒，还是用 `fact` 回答后由人自行写入计划？
-6. **想法规则 ID**：`I01`，放在 playbook 新增的「0. 想法」一节？
-7. **回答的值类型**：V1 只支持布尔（`is: true / false`）？数字阈值（如跟踪月数）留到估值清单再说。
+- 实跑：在真实 AMD 档案上运行 WORKFLOW §5 的循环。
+- 文档：去掉 WORKFLOW 的「Phase 2 目标」状态行；DESIGN 与 README 描述新现状。
 
 ## 不在 Phase 2
 
-- 估值清单（WORKFLOW §9 伏笔）、结构 proposal 脚本、agent / skill。
+- 估值清单（与 V09 同样的 `checklist` 形式）、结构 proposal 脚本、agent / skill。
 - 由日志驱动的 V08 自动化与参数校准。
 - 近似算法升级（Fib、背离）。
 - 执行时刻的检查（如用实际开盘价判 V13）。
@@ -92,6 +139,6 @@
 
 ## 完成标准
 
-- 只编辑档案文件、重复运行同一条管道，就能走完 ⑦ 的六个阶段。
-- 执行器中不再有 `manual` / `todo` / `memo`；每个未知结果都对应一个带 key 的提问。
+- 只编辑档案文件、重复运行同一条管道，就能走完 ⑧ 的六个阶段。
+- 执行器中不再有 `manual` / `memo`；每个未知结果都对应一个带 key 的提问。
 - 代码中不出现规则 ID；包 ≤ 2200 行；pytest 与 ruff 通过。

@@ -44,14 +44,6 @@ def rsi_above(snap: Snapshot, period: int, x: float) -> Check:
     return Check(value > x, (f"RSI-{period}={value:.1f}", f"x={x}"))
 
 
-def rsi_below(snap: Snapshot, period: int, x: float) -> Check:
-    """P-RSI：T 日 RSI 是否低于 x。"""
-    value = rsi(snap.bars.closes, period)
-    if value is None:
-        return Check(None, (f"历史不足 {period + 1} 根",), missing=True)
-    return Check(value < x, (f"RSI-{period}={value:.1f}", f"x={x}"))
-
-
 def rsi_below_within(snap: Snapshot, period: int, x: float, days: int) -> Check:
     """最近 days 根内 RSI 是否曾低于 x。"""
     series = rsi_series(snap.bars.closes, period)[-days:]

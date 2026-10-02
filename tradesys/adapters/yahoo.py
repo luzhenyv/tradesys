@@ -1,4 +1,4 @@
-"""yfinance 取数（DESIGN §6）：唯一的网络 I/O，输出 Snapshot。
+"""yfinance 取数（DESIGN §7）：唯一的网络 I/O，输出 Snapshot。
 
 as_of 约束：日线可以回溯；基本面、财报日、期权链只有"现在"的数据，
 因此只在 as_of 为今天时获取，否则留空（依赖它们的规则得到 UNAVAILABLE）。

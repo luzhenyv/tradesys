@@ -1,4 +1,4 @@
-"""把 RunOutput 收成 Markdown 备忘录（DESIGN §3 结论规则）。
+"""把 RunOutput 收成 Markdown 备忘录（DESIGN §5 结论规则）。
 
 过渡形态：章节随规则实现进度增减。报告只按 status / trust / kind 归类，不认识任何规则。
 """
@@ -112,8 +112,8 @@ def _coverage(out: RunOutput) -> list[str]:
             continue
         seen.add(r.rule_id)
         same = [x for x in out.results if x.rule_id == r.rule_id]
-        if r.kind in ("manual", "todo"):
-            key = "人工" if r.kind == "manual" else "占位未实现"
+        if r.kind == "manual":
+            key = "人工"
             asks.append(f"  - {r.rule_id} {r.title}：{'；'.join(r.evidence)}")
         elif any(x.status in UNKNOWN for x in same):
             key = "不可判定"
@@ -121,7 +121,7 @@ def _coverage(out: RunOutput) -> list[str]:
             key = "判定" if r.trust == "decide" else "近似"
         groups.setdefault(key, []).append(r.rule_id)
     lines = ["## 规则覆盖（过渡）", ""]
-    for key in ("判定", "近似", "不可判定", "占位未实现", "人工"):
+    for key in ("判定", "近似", "不可判定", "人工"):
         ids = groups.get(key, [])
         lines.append(f"- {key} {len(ids)}：{' '.join(ids) or '—'}")
     if out.idle:

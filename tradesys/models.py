@@ -1,4 +1,4 @@
-"""数据对象（DESIGN §3）。全部为 frozen dataclass，可经 serialize.py 与 JSON 互转。"""
+"""数据对象（DESIGN §2）。全部为 frozen dataclass，可经 serialize.py 与 JSON 互转。"""
 
 from __future__ import annotations
 
@@ -171,7 +171,7 @@ class RuleResult:
     candidate_id: str | None = None
     review: bool = False
     trust: str = "decide"  # decide | review | memo；报告用，执行器原样搬运
-    kind: str = ""  # 决定结果的块：veto | warn | setup | manual | todo | advice
+    kind: str = ""  # 决定结果的块：veto | warn | setup | manual | advice
 
 
 @dataclass(frozen=True)

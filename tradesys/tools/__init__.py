@@ -1,4 +1,4 @@
-"""工具注册表（DESIGN §5）。playbook 的 rule 块按名字引用这里的工具。
+"""工具注册表（DESIGN §6）。playbook 的 rule 块按名字引用这里的工具。
 
 约定：tool(snap, **args) -> Check；scope: candidate 的工具为 tool(snap, candidate, **args)。
 candidate 规则里可以组合不接收 candidate 的工具（只看 Snapshot）。
@@ -22,7 +22,7 @@ from tradesys.tools.proximity import far_from_support, tight_to_resistance
 from tradesys.tools.quote import buffered_low, nearest_resistance, session_close
 from tradesys.tools.retest import buffered_line, buffered_zone_low, retest_breakout, retest_line
 from tradesys.tools.risk import rr_below, stop_wider_than
-from tradesys.tools.rsi import rsi_above, rsi_below, rsi_below_within
+from tradesys.tools.rsi import rsi_above, rsi_below_within
 from tradesys.tools.setup import first_down, pullback_to_ma, up_streak
 from tradesys.tools.structure import line_broken_within, zone_broken_within
 from tradesys.tools.swing import divergence
@@ -45,7 +45,6 @@ TOOLS = {
     "volume_dry": volume_dry,
     "trend": trend,
     "rsi_above": rsi_above,
-    "rsi_below": rsi_below,
     "rsi_below_within": rsi_below_within,
     "divergence": divergence,
     "fib_broken": fib_broken,

@@ -158,12 +158,6 @@ when:
 kind: advice
 say: 固定提醒
 ```
-
-### X05 占位
-```rule
-kind: todo
-ask: 待实现
-```
 """
 
 
@@ -182,7 +176,6 @@ def test_unknown_block_does_not_stop_later_blocks(tmp_path):
         "memo",
         ("固定提醒",),
     )
-    assert (rows["X05"].status, rows["X05"].kind) == (RuleStatus.MANUAL, "todo")
 
 
 def test_v07_uptrend_without_earnings_is_pass():

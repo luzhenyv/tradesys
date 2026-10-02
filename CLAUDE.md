@@ -1,34 +1,25 @@
-# tradesys
+# 开发守则
 
-把自然语言的投资哲学变成可执行的判断：**规则是数据（playbook），代码是工具，执行器是通用的。**
+项目介绍、命令与文档地图见 `README.md`。本文件只放开发哲学与守则。
 
-## 入口
+## 哲学
 
-| 文件 | 内容 |
-| --- | --- |
-| `docs/DESIGN.md` | 设计：四层、数据对象、rule 块语法、工具约定、边界 |
-| `playbooks/technical.md` | 当前 playbook：自然语言规则 + rule 块（方法论 Source of Truth） |
-| `docs/plans/phase-1.md` | 当前阶段计划 |
-| `docs/sources/` | 原始材料：`voice/` 原文，`summaries/` LLM 整理 |
-| `docs/archive/` | 已被取代的旧文档，仅供参考 |
+- **规则是数据，代码是工具，执行器是通用的。** 规则与阈值只写在 playbook；代码中不出现任何规则 ID。换风格 = 换 playbook。
+- **尽可能简洁，不增加概念。** 够用即可；新概念先尝试用已有概念表达，每加一个最好删掉一个。
+- **Unix：小工具 + 组合。** 工具是纯函数 `tool(snap, **args) -> Check`，每个函数约 ≤ 50 行；复杂判断在 rule 块里组合工具，不写全能函数。文件与 JSON 就是接口。
+- **执行器不含规则。** `tradesys/run.py` 只解析 rule 块并调用工具；只有 rule 块语法确实不够用时才改它。
+- **编排可替换。** CLI 每个命令 JSON 进出、可单独调用；将来 agent / skill 用同一组命令。不写 agent 代码。
+- **不知道 = 不买，并提问。** 判定规则无法判断时不给买入结论，而是列为待人工确认的问题。
+- **人画，机器判。** 结构、近似算法、主观判断，系统没把握的留空并提问；不为某只股票硬找图上没有的结构。
+- **场景不进工具。** 工具不知道自己被哪个流程阶段调用。
 
-## 开发守则
+## 守则
 
-- **代码依赖规则**：规则、阈值只写在 playbook；代码中不出现任何规则 ID。换风格 = 换 playbook。
-- **小工具 + 组合**：工具是纯函数 `tool(snap, **args) -> Check`，约 ≤ 50 行，在 `tradesys/tools/__init__.py` 注册。复杂判断靠在 rule 块里组合工具，不写全能函数。
-- **执行器不含规则**：`tradesys/run.py` 只解析 rule 块并调用工具；只有 rule 块语法确实不够用时才改它。
-- **编排可替换**：CLI 每个命令 JSON 进出、可单独调用，将来 agent / skill 用同一组命令。不写 agent 代码。
-- **文档先行**：先写 playbook 条目和 rule 块，再补缺少的工具；工具 docstring 首行写原语 ID 与来源。
-- **简单优先**：MVP 够用即可；结构由人在 YAML 中画（或声明 absent），机器只判定；包约 ≤ 2200 行。
-- **不知道等于不买；规则服务于实盘**：判定规则未知即不买；不硬找图上没有的结构。
-- 规则以 voice 原文为准；测试名写原始案例，规则案例通过真实 playbook 运行。
-
-## 常用命令
-
-```bash
-uv run pytest -q              # 离线测试；联网测试用 -m network
-uv run ruff check . && uv run ruff format .
-uv run tradesys tools
-uv run tradesys fetch AMD > snap.json
-uv run tradesys run playbooks/technical.md < snap.json
-```
+- **文档先行**：先写 playbook 条目与 rule 块，再补缺少的工具；工具 docstring 首行写原语 ID 与来源（如 `P-NEWLOW · EP301§R01`）。
+- **规则以 voice 原文为准**：`docs/sources/voice/` 是唯一依据，summary 只作参考。
+- **测试**：测试名写原始案例；规则案例通过真实 playbook 运行，不在代码里复制规则。
+- **规模**：`tradesys/` 包约 ≤ 2200 行；超出时先简化或降级为人工。
+- **每个主题只写在一处**：README（介绍与命令）、DESIGN（系统设计）、WORKFLOW（使用流程）、playbook（交易规则）、sources（来源）。其他文件只引用，不复制。
+- **文档描述现状**：计划中的改动只写在 `docs/plans/`；落地的那次提交同时更新对应文档。
+- **`docs/archive/` 只读**，批量替换时排除。
+- 每步结束 `uv run pytest -q` 与 `uv run ruff check .` 都通过。

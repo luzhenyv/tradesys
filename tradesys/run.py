@@ -11,10 +11,10 @@ from tradesys.tools import call
 
 HEADING = re.compile(r"^### (\S+)\s+(.*)$")
 STATUS = {"veto": RuleStatus.VETO, "warn": RuleStatus.WARN, "advice": RuleStatus.WARN}
-ASKS = ("manual", "todo")  # 只写 ask，不调用工具
+ASKS = ("manual",)  # 只写 ask，不调用工具
 
 
-KINDS = {"veto", "warn", "setup", "manual", "todo", "advice"}
+KINDS = {"veto", "warn", "setup", "manual", "advice"}
 KEYS = {"kind", "scope", "when", "trust", "ask", "say", "entry", "stop", "target"}
 
 
@@ -89,7 +89,7 @@ def check_all(
 
 
 def block_trust(block: dict) -> str:
-    """decide 计入结论；review 只进参考；memo（manual / todo / advice）不参与判定。"""
+    """decide 计入结论；review 只进参考；memo（manual / advice）不参与判定。"""
     if block.get("trust"):
         return str(block["trust"])
     if block.get("kind") in (*ASKS, "advice"):
