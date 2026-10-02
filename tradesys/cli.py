@@ -73,7 +73,7 @@ def tool(
 
 @app.command()
 def run(playbook: Path) -> None:
-    """运行整份 playbook：stdin 读 Snapshot JSON，stdout 输出 RunOutput JSON。"""
+    """运行 workflow 或内嵌 rule 文件：stdin 读 Snapshot，stdout 输出 RunOutput JSON。"""
     typer.echo(to_json(run_playbook(playbook, _snapshot())))
 
 

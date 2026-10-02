@@ -4,7 +4,7 @@
 
 ## 哲学
 
-- **规则是数据，代码是工具，执行器是通用的。** 规则与阈值只写在 playbook；代码中不出现任何规则 ID。换风格 = 换 playbook。
+- **三层资产。** 原语 = 一个工具函数；规则 = 原语的冻结组合（参数、`kind`、`scope`、`trust` 写在规则里），规则就是节点；Workflow = 一条策略的节点 ID 清单。代码中不出现规则 ID。新策略先写 workflow 清单，优先点已有规则；不够用已有原语拼新规则；原语不够再补工具。
 - **尽可能简洁，不增加概念。** 够用即可；新概念先尝试用已有概念表达，每加一个最好删掉一个。
 - **Unix：小工具 + 组合。** 工具是纯函数 `tool(snap, **args) -> Check`，每个函数约 ≤ 50 行；复杂判断在 rule 块里组合工具，不写全能函数。文件与 JSON 就是接口。
 - **执行器不含规则。** `tradesys/run.py` 只解析 rule 块并调用工具；只有 rule 块语法确实不够用时才改它。
@@ -15,11 +15,11 @@
 
 ## 守则
 
-- **文档先行**：先写 playbook 条目与 rule 块，再补缺少的工具；工具 docstring 首行写原语 ID 与来源（如 `P-NEWLOW · EP301§R01`）。
+- **文档先行**：先写规则与 workflow，再补缺少的工具；工具 docstring 首行写原语 ID 与来源（如 `P-NEWLOW · EP301§R01`）。
 - **规则以 voice 原文为准**：`docs/sources/voice/` 是唯一依据，summary 只作参考。
-- **测试**：测试名写原始案例；规则案例通过真实 playbook 运行，不在代码里复制规则。
+- **测试**：测试名写原始案例；规则案例通过真实 workflow 运行，不在代码里复制规则。
 - **规模**：`tradesys/` 包约 ≤ 2200 行；超出时先简化或降级为人工。
-- **每个主题只写在一处**：README（介绍与命令）、DESIGN（系统设计）、WORKFLOW（使用流程）、playbook（交易规则）、sources（来源）、`docs/rule-status.md`（完成度与调试注意）。其他文件只引用，不复制。
+- **每个主题只写在一处**：README（介绍与命令）、DESIGN（系统设计）、WORKFLOW（使用流程）、`playbooks/primitives.md`（原语）、`playbooks/rules.md`（规则）、workflow 文件（策略清单）、sources（来源）、`docs/rule-status.md`（完成度与调试注意）。其他文件只引用，不复制。
 - **文档描述现状**：计划中的改动只写在 `docs/plans/`；落地的那次提交同时更新对应文档。
 - **`docs/archive/` 只读**，批量替换时排除。
 - 每步结束 `uv run pytest -q` 与 `uv run ruff check .` 都通过。

@@ -1,4 +1,4 @@
-"""执行器（DESIGN §4）：读 playbook，按 rule 块调用工具，汇总结果。不含任何规则逻辑。"""
+"""执行器（DESIGN §4）：读 workflow 或内嵌 rule 块，调用工具，汇总结果。不含任何规则逻辑。"""
 
 import re
 from dataclasses import dataclass
@@ -59,6 +59,39 @@ def parse(text: str) -> list[Rule]:
         elif line.strip() == "```rule" and rules:
             block = []
     return rules
+
+
+def workflow_nodes(text: str) -> list[str] | None:
+    """```workflow 中的 nodes ID 列表；没有该块则返回 None。"""
+    buf: list[str] | None = None
+    for line in text.splitlines():
+        if buf is not None:
+            if line.strip() == "```":
+                data = yaml.safe_load("\n".join(buf)) or {}
+                nodes = data.get("nodes")
+                ok = isinstance(nodes, list) and nodes and all(isinstance(x, str) for x in nodes)
+                if not ok:
+                    raise ValueError("workflow.nodes 必须是非空 ID 列表")
+                return list(nodes)
+            buf.append(line)
+        elif line.strip() == "```workflow":
+            buf = []
+    return None
+
+
+def load_rules(path: str | Path) -> list[Rule]:
+    """有 ```workflow 则按 ID 从同目录 rules.md 取节点；否则解析该文件内的 rule 块。"""
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
+    ids = workflow_nodes(text)
+    if ids is None:
+        return [r for r in parse(text) if r.blocks]
+    raw = parse((path.parent / "rules.md").read_text(encoding="utf-8"))
+    catalog = {r.id: r for r in raw if r.blocks}
+    missing = [i for i in ids if i not in catalog]
+    if missing:
+        raise ValueError(f"{path.name}: 规则库没有 {missing}")
+    return [catalog[i] for i in ids]
 
 
 def check_all(
@@ -192,7 +225,7 @@ def run(playbook: str | Path, snap: Snapshot, candidates: tuple[Candidate, ...] 
     """先跑 setup 产出候选，再跑其余规则。scope: candidate 对每个候选各一次。"""
     results: list[RuleResult] = []
     produced: list[Candidate] = []
-    rules = [r for r in parse(Path(playbook).read_text(encoding="utf-8")) if r.blocks]
+    rules = load_rules(playbook)
     for rule in rules:
         if rule.blocks[0].get("kind") == "setup":
             rr, cand = evaluate_setup(rule, snap)

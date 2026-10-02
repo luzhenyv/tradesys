@@ -1,6 +1,6 @@
 # 规则完成度（调试用）
 
-> 对照 EP301 / EP302 voice 的可执行条目。规则正文见 `playbooks/technical.md`；本文件只记实现等级与实盘时要盯的问题。
+> 对照 EP301 / EP302 voice 的可执行条目。规则正文见 `playbooks/rules.md`；本文件只记实现等级与实盘时要盯的问题。
 > 跑法：`uv run python scripts/pipeline.py AMZN`（无档案 = 从头）。下断点见该脚本。
 
 ## 等级

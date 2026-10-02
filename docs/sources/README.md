@@ -5,7 +5,7 @@
 
 文件命名：`2026-09-23-<id小写>-<中文短名>.md`，summary 追加 `-summary`。
 
-规则引用稳定的 Source ID：`EP301§R05` = 第 301 期第 5 条，`EP302§B3` = 第 302 期买点 3。用 `grep -n "EP150" playbooks/*.md` 查某个来源被哪些规则引用。
+规则引用稳定的 Source ID：`EP301§R05` = 第 301 期第 5 条，`EP302§B3` = 第 302 期买点 3。用 `grep -n "EP150" playbooks/rules.md` 查某个来源被哪些规则引用。
 
 | Source ID | 主题 |
 | --- | --- |

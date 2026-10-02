@@ -5,15 +5,17 @@
 ## 1. 分层
 
 ```text
-playbooks/*.md      规则：自然语言原文 + 可执行的 rule 块（数据）
-tradesys/tools/     工具：纯函数，Snapshot → Check
-tradesys/run.py     执行器：解析 rule 块，调用工具，汇总 RunOutput（不含任何规则）
-tradesys/report.py  RunOutput → Markdown（档案视图：结论 / 待回答 / 计划 / 建议买点 / 提醒）
-tradesys/adapters/  取数（yahoo、fake）与档案 YAML；唯一的 I/O
-tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
+playbooks/primitives.md  原语说明书（不执行）
+playbooks/rules.md       规则库：原语的冻结组合，规则 = 节点（数据）
+playbooks/technical.md   Workflow · 技术面（节点 ID 清单）
+tradesys/tools/          原语实现：纯函数，Snapshot → Check
+tradesys/run.py          执行器：读 workflow 或内嵌 rule 块，调用工具（不含任何规则）
+tradesys/report.py       RunOutput → Markdown（档案视图：结论 / 待回答 / 计划 / 建议买点 / 提醒）
+tradesys/adapters/       取数（yahoo、fake）与档案 YAML；唯一的 I/O
+tradesys/cli.py          薄壳：fetch / run / report / tool / tools，JSON 进出
 ```
 
-依赖只有一个方向：playbook → 工具名 → 工具。工具不知道 playbook，执行器不知道任何具体规则。
+三层资产：原语（一个工具函数）→ 规则（冻结的原语组合，即节点）→ Workflow（策略 = 节点清单）。依赖只有一个方向：workflow → 规则 ID → 工具名 → 工具。工具不知道规则，执行器不知道任何具体策略。新策略先写清单；不够再拼规则；原语不够再补工具。
 
 ## 2. 数据对象
 
@@ -30,10 +32,11 @@ tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 
 `RuleStatus`：`PASS / VETO / WARN / MANUAL`（无法判断）/ `UNAVAILABLE`（缺数据）。
 
-## 3. Playbook 格式
+## 3. 规则与 Workflow
 
-- 一份 Markdown。每条规则是一个 `### ID 标题` 段落：条件、来源（附 voice 引文）、案例，以及若干 ```rule 块。没有 rule 块的段落不执行。
-- **ID**：`I` 想法、`V` 不买原则（EP301 顺序），`S` 买点（EP302 顺序），`A-*` 提醒，`P-*` 原语（定义在 `*-primitives.md`，不执行）。
+- **`rules.md`**：每个 `### ID 标题` 下的 ```rule 块是一条规则（节点）。参数、`kind`、`scope`、`trust` 冻结在规则里，workflow 不覆盖。没有 rule 块的段落不执行。
+- **Workflow 文件**（`technical.md`、`left.md`）：散文 + ```workflow 的 `nodes` ID 列表。`run` 按清单到 `rules.md` 取节点。无 ```workflow 的文件仍按内嵌 rule 块执行（测试片段）。不引入节点图。
+- **ID**：`I` 想法、`V` 不买、`S` 买点、`A-*` 提醒、`L` / `A-LEFT` 左侧、`P-*` 原语（`primitives.md`，不执行）。
 - **阈值写在 rule 块里**，注释标注状态：`已裁决`（用户决定）/ `source`（原文给出）/ `默认值`（待实盘校准）。
 - **时点**：规则在 `session_date`（最近一个已收盘交易日）上求值，记为 T。
 - **实现等级**由 rule 块本身体现：普通块 = 完整实现；`trust: review` = 近似算法；依赖结构的工具在无结构时返回 MANUAL；人的回答由 `fact` / `checklist` 读取，缺失或过期 → 未知。各条对照 voice 的完成度见 `docs/rule-status.md`。
@@ -42,7 +45,7 @@ tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 
 ```yaml
 kind: veto              # veto | warn | setup | advice
-scope: candidate        # 可选：对每个候选买点运行一次
+scope: candidate        # 可选：对每个候选买点各跑一次；省略则对整份 Snapshot 跑一次
 trust: review           # 可选：decide（默认）| review
 when:                   # 工具列表，AND
   - new_high: {n: 20}
@@ -51,6 +54,7 @@ say: 提醒文本            # 可选：命中时放在 evidence 最前
 ask: 提问               # 可选：块未知时放在 evidence 首位
 ```
 
+- **`scope`**：省略 = 上下文，整只股票当天跑一次（如 V01 新低）。`candidate` = 对每个候选买点各跑一次（档案 `plans` + 当次 setup 产出）；需要该点的 entry/stop/target（如 V05 止损过宽）。没有候选时这类规则不跑。`scope` 不是审查/盯盘阶段。
 - **块内 AND 用 Kleene 逻辑**：任一工具 False → 不命中；否则有 None → 未知。setup 块例外：有 None 即未知。
 - **一条规则的多个块 = if / elif**：首个命中的块决定结果；都不命中 → PASS。
 - **未知的块不终止判断**：记下后继续；后面有块命中就用它，否则报告未知（MANUAL，缺数据时 UNAVAILABLE）。例外：之前有未知的 veto 块时，只有后续命中的 veto 能取代它。

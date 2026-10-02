@@ -6,7 +6,7 @@
 
 ## 核心功能
 
-- **规则即数据**：方法论写在 `playbooks/technical.md`，每条规则 = 原文条件 + 来源 + 案例 + 可执行的 `rule` 块。换风格只换 playbook。
+- **规则即数据**：原语是工具函数；规则是冻结的原语组合（`playbooks/rules.md`）；策略是 workflow 节点清单（`playbooks/technical.md`、`left.md`）。换策略只换清单。
 - **小工具组合**：`tradesys/tools/` 中的纯函数（新低、量能、RSI、结构破位、K 线形态、Band68…）由 rule 块按名字组合调用。
 - **一只股票一份档案**：`data/tickers/<TICKER>.yaml` 写人画的结构（支撑阻力区间、趋势线、颈线、旗形）与人的回答，机器只判定。
 - **不用未来数据**：任意 as_of 回放日线；基本面、财报日、期权链只取当天。
@@ -24,7 +24,7 @@ uv run tradesys fetch AMD | uv run tradesys run playbooks/technical.md | uv run 
 | 命令 | 作用 |
 | --- | --- |
 | `tradesys fetch AMD [--as-of 2026-10-01T17:00 --tz America/New_York]` | 取数 → Snapshot JSON（唯一的网络 I/O） |
-| `tradesys run PLAYBOOK < snap.json` | 运行全部规则 → RunOutput JSON |
+| `tradesys run WORKFLOW < snap.json` | 按节点清单跑规则库 → RunOutput JSON |
 | `tradesys report < run.json` | Markdown 备忘录 |
 | `tradesys tool new_low --arg n=20 < snap.json` | 单独运行一个工具 → Check JSON |
 | `tradesys tools` | 列出全部工具 |
@@ -44,8 +44,9 @@ uv run ruff check . && uv run ruff format .
 | `docs/DESIGN.md` | 系统设计：分层、数据对象、rule 块语法、工具约定、数据约束 |
 | `docs/WORKFLOW.md` | 一只股票从想法到记录的流程；盯盘管道与本地日志 |
 | `docs/rule-status.md` | 18+9 条规则的完成度与调试注意 |
-| `playbooks/technical.md` | 交易规则：原则、想法（I）、不买（V）、买点（S）、提醒（A） |
-| `playbooks/technical-primitives.md` | 规则共用的原语定义（P-*） |
+| `playbooks/primitives.md` | 原语说明书（P-*，不执行） |
+| `playbooks/rules.md` | 规则库（节点定义） |
+| `playbooks/technical.md` | Workflow：盘后能不能买 |
 | `docs/sources/` | 原始材料与 Source ID |
 | `docs/plans/` | 已完成的阶段计划（`phase-2.md`） |
 | `docs/archive/` | 已被取代的旧文档，只读 |
@@ -53,12 +54,12 @@ uv run ruff check . && uv run ruff format .
 ## 目录
 
 ```text
-playbooks/          规则（数据）
+playbooks/          原语说明书、规则库、workflow
 tradesys/tools/     工具：纯函数 Snapshot → Check
 tradesys/run.py     执行器：解析 rule 块并调用工具，不含规则
 tradesys/report.py  Markdown 备忘录
 tradesys/adapters/  取数（yahoo）与档案 YAML 读取
 data/tickers/       档案：一只股票一个 YAML
-tests/unit/         测试（规则案例通过真实 playbook 运行）
+tests/unit/         测试（规则案例通过真实 workflow 运行）
 scripts/            调试与运维（不进包）；临时稿 scripts/local/
 ```

@@ -1,6 +1,6 @@
-# 原语 · 技术面
+# 原语
 
-> `playbooks/technical.md` 中的规则共同使用的判定积木。每个原语只有一个实现（工具 docstring 首行写原语 ID）；规则不得自行重写。本文件不执行。
+> 规则库共同使用的判定积木。每个原语只有一个实现（工具 docstring 首行写原语 ID）；规则不得自行重写。本文件不执行。
 > **Impl**：`full` 完整实现；`simple` 近似算法（工具返回 `review=True`）；`YAML` 结构由人画。
 
 ### P-TREND 趋势方向
