@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from tradesys.adapters.fake import fake_snapshot, make_bars, make_chain
-from tradesys.models import Fundamental, RuleStatus, Zone
+from tradesys.models import Fact, Fundamental, RuleStatus, Zone
 from tradesys.report import conclusion, render, verdict
 from tradesys.run import run
 
@@ -36,8 +36,7 @@ def test_no_setup_is_no_buy_point_and_lists_coverage():
     assert "请在 YAML 中标注结构" in md
     assert "## 未能评估的买点（不阻断）" in md
     assert "## 规则覆盖（过渡）" in md
-    assert "- 人工清单：" in md
-    assert "V06" in md
+    assert "请回答 v06.sector_top_loser（阻断）" in md
 
 
 def test_simple_setup_is_reference_not_buy():
@@ -52,6 +51,17 @@ def test_simple_setup_is_reference_not_buy():
 
 
 S01_ZONE = Zone("z-100-120", "resistance", 100.0, 120.0)
+S01_T = date(2026, 1, 22)
+V09 = ("business", "revenue_mix", "last_earnings", "growth", "margin", "guidance")
+V09 += ("competitors", "catalyst", "tracked")
+# 人的回答全部「无问题」：有理由，非板块领跌，未被止损，熟悉基本面，社群正常
+CLEAN = {
+    "idea.reason": Fact("回踩突破区间", S01_T),
+    "v06.sector_top_loser": Fact(False, S01_T),
+    "v08.stopped_out": Fact(False, S01_T),
+    "v10b.social_hype": Fact(False, S01_T),
+    **{f"v09.{k}": Fact(True, S01_T) for k in V09},
+}
 
 
 def _s01_snap(zones=(S01_ZONE,), **inputs):
@@ -83,6 +93,7 @@ def test_s01_with_target_and_known_context_is_buy():
         absent=("trendline", "neckline", "flag"),
         fundamental=Fundamental(1e11, "NMS", None),
         next_earnings=date(2026, 6, 1),
+        facts=CLEAN,
     )
     out = run(PLAYBOOK, snap)
     assert conclusion(out) == "买（long）", render(out)
@@ -141,6 +152,7 @@ def test_unknown_warn_does_not_block_buy():
         absent=("trendline", "neckline", "flag"),
         fundamental=Fundamental(None, "NMS", None),
         next_earnings=date(2026, 6, 1),
+        facts=CLEAN,
     )
     out = run(PLAYBOOK, snap)
     (v10,) = [r for r in out.results if r.rule_id == "V10"]
@@ -153,3 +165,18 @@ def test_header_shows_expired_groups_and_absent():
     snap = replace(_s01_snap(absent=("flag", "neckline")), expired=("trendline",))
     md = render(run(PLAYBOOK, snap))
     assert "结构：已过期，请复核：trendline · absent: flag, neckline" in md
+
+
+def test_unanswered_question_blocks_buy_until_answered():
+    # 不知道 = 不买，并提问：同一买点，少答 V09 一项 → 待确认，并列出要填写的 key
+    kw = dict(
+        zones=(S01_ZONE, Zone("r2", "resistance", 160.0, 170.0)),
+        absent=("trendline", "neckline", "flag"),
+        fundamental=Fundamental(1e11, "NMS", None),
+        next_earnings=date(2026, 6, 1),
+    )
+    partial = {k: v for k, v in CLEAN.items() if k != "v09.tracked"}
+    out = run(PLAYBOOK, _s01_snap(facts=partial, **kw))
+    assert conclusion(out) == "不买 · 待确认 1 项"
+    assert "请回答 v09.tracked（阻断）" in render(out)
+    assert conclusion(run(PLAYBOOK, _s01_snap(facts=CLEAN, **kw))) == "买（long）"

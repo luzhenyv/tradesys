@@ -11,10 +11,7 @@ from tradesys.tools import call
 
 HEADING = re.compile(r"^### (\S+)\s+(.*)$")
 STATUS = {"veto": RuleStatus.VETO, "warn": RuleStatus.WARN, "advice": RuleStatus.WARN}
-ASKS = ("manual",)  # 只写 ask，不调用工具
-
-
-KINDS = {"veto", "warn", "setup", "manual", "advice"}
+KINDS = {"veto", "warn", "setup", "advice"}
 KEYS = {"kind", "scope", "when", "trust", "ask", "say", "entry", "stop", "target"}
 
 
@@ -27,9 +24,8 @@ def _validate(rule_id: str, block: dict) -> dict:
         (not set(block) <= KEYS, f"未知键 {sorted(set(block) - KEYS)}"),
         (kind in ("veto", "warn", "setup") and not block.get("when"), "缺少 when"),
         (kind == "setup" and not block.get("entry"), "缺少 entry"),
-        (kind in ASKS and not block.get("ask"), "缺少 ask"),
         (kind == "advice" and not (block.get("say") or block.get("when")), "缺少 say 或 when"),
-        (block.get("trust") not in (None, "decide", "review", "memo"), "trust 不合法"),
+        (block.get("trust") not in (None, "decide", "review"), "trust 不合法"),
         (block.get("scope") not in (None, "candidate"), "scope 不合法"),
     )
     for bad, problem in checks:
@@ -89,12 +85,8 @@ def check_all(
 
 
 def block_trust(block: dict) -> str:
-    """decide 计入结论；review 只进参考；memo（manual / advice）不参与判定。"""
-    if block.get("trust"):
-        return str(block["trust"])
-    if block.get("kind") in (*ASKS, "advice"):
-        return "memo"
-    return "decide"
+    """decide 计入结论；review 只进参考。advice 由报告按 kind 区分，不参与判定。"""
+    return str(block.get("trust") or "decide")
 
 
 def _field(spec: dict | None, snap: Snapshot) -> Check:
@@ -105,9 +97,18 @@ def _field(spec: dict | None, snap: Snapshot) -> Check:
 
 
 def _unknown(rule: Rule, c: Check, block: dict, cid: str | None, review: bool) -> RuleResult:
+    """块无法判断：缺数据为 UNAVAILABLE，否则 MANUAL；块上的 ask 作为提问放在最前。"""
     status = RuleStatus.UNAVAILABLE if c.missing else RuleStatus.MANUAL
+    asked = (block["ask"],) if block.get("ask") else ()
     return RuleResult(
-        rule.id, rule.title, status, c.evidence, cid, review, block_trust(block), block["kind"]
+        rule.id,
+        rule.title,
+        status,
+        asked + c.evidence,
+        cid,
+        review,
+        block_trust(block),
+        block["kind"],
     )
 
 
@@ -161,16 +162,6 @@ def evaluate(rule: Rule, snap: Snapshot, candidate: Candidate | None = None) -> 
     for block in rule.blocks:
         if block["kind"] == "setup":
             continue
-        if block["kind"] in ASKS:
-            return unknown or RuleResult(
-                rule.id,
-                rule.title,
-                RuleStatus.MANUAL,
-                (block["ask"],),
-                cid,
-                trust=block_trust(block),
-                kind=block["kind"],
-            )
         c = check_all(block.get("when") or [], snap, candidate)
         review = review or c.review
         if c.hit is None:

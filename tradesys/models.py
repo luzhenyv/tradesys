@@ -179,8 +179,8 @@ class RuleResult:
     evidence: tuple[str, ...] = ()
     candidate_id: str | None = None
     review: bool = False
-    trust: str = "decide"  # decide | review | memo；报告用，执行器原样搬运
-    kind: str = ""  # 决定结果的块：veto | warn | setup | manual | advice
+    trust: str = "decide"  # decide | review；报告用，执行器原样搬运
+    kind: str = ""  # 决定结果的块：veto | warn | setup | advice
 
 
 @dataclass(frozen=True)

@@ -76,7 +76,7 @@ def test_v11_shrinking_new_high_vetoes():
     assert _status(run(PLAYBOOK, snap), "V11") == RuleStatus.VETO
 
 
-def test_manual_rules_need_no_code():
+def test_human_questions_are_asked_without_answers():
     results = run(PLAYBOOK, SNAP).results
     assert {r.rule_id for r in results if r.status == RuleStatus.MANUAL} >= {"V06", "V08", "V09"}
 
@@ -173,7 +173,7 @@ def test_unknown_block_does_not_stop_later_blocks(tmp_path):
     assert rows["X06"].status == RuleStatus.VETO
     assert (rows["X04"].status, rows["X04"].trust, rows["X04"].evidence) == (
         RuleStatus.WARN,
-        "memo",
+        "decide",  # advice 由报告按 kind 排除，不参与判定
         ("固定提醒",),
     )
 
@@ -196,11 +196,11 @@ def test_parse_rejects_misspelled_when():
         parse("### X01 t\n```rule\nkind: veto\nWhen:\n  - new_low: {n: 20}\n```\n")
 
 
-def test_parse_rejects_unknown_kind_and_missing_ask():
+def test_parse_rejects_unknown_kind_including_removed_manual():
     with pytest.raises(ValueError, match="X01: kind"):
         parse("### X01 t\n```rule\nkind: vito\nwhen:\n  - new_low: {n: 20}\n```\n")
-    with pytest.raises(ValueError, match="X02: 缺少 ask"):
-        parse("### X02 t\n```rule\nkind: manual\n```\n")
+    with pytest.raises(ValueError, match="X02: kind"):
+        parse("### X02 t\n```rule\nkind: manual\nask: 问\n```\n")
 
 
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
@@ -243,15 +243,22 @@ def test_v04_expanding_drop_passes():
     assert _status(run(PLAYBOOK, fake_snapshot(make_bars(closes, vols))), "V04") == RuleStatus.PASS
 
 
-def test_v07_downtrend_earnings_drop_and_expand_vetoes():
+def test_v07_downtrend_earnings_drop_and_expand_without_bad_news_vetoes():
+    # EP301§R07：财报前持续下跌又放量加速，「也没有什么太多的利空消息」→ 不买
     prior = [130.0 - 0.4 * i for i in range(29)]
     bars = make_bars(prior + [prior[-1] * 0.96], [1e6] * 29 + [2e6])
-    snap = fake_snapshot(bars, next_earnings=_weekdays_after(bars.last.d, 2))
-    results = run(PLAYBOOK, snap)
-    r = next(x for x in results.results if x.rule_id == "V07")
-    assert r.status == RuleStatus.VETO
-    assert r.review
-    assert "请确认无明显利空消息" in r.evidence
+    t = bars.last.d
+
+    def v07(**facts):
+        snap = fake_snapshot(bars, next_earnings=_weekdays_after(t, 2), facts=facts)
+        return next(x for x in run(PLAYBOOK, snap).results if x.rule_id == "V07")
+
+    asked = v07()
+    assert asked.status == RuleStatus.MANUAL
+    assert asked.evidence[-1] == "请回答 v07.no_bad_news"
+    vetoed = v07(**{"v07.no_bad_news": Fact(True, t)})
+    assert vetoed.status == RuleStatus.VETO and vetoed.review
+    assert v07(**{"v07.no_bad_news": Fact(False, t)}).status == RuleStatus.PASS
 
 
 def test_v07_no_earnings_is_unavailable():

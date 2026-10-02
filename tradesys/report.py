@@ -17,7 +17,7 @@ def _setup_trust(out: RunOutput, setup_id: str) -> str:
 
 
 def _decide(r: RuleResult) -> bool:
-    return r.trust == "decide" and r.kind != "setup"
+    return r.trust == "decide" and r.kind in ("veto", "warn")
 
 
 def candidates(out: RunOutput, trust: str = "decide") -> list[Candidate]:
@@ -102,29 +102,23 @@ def _header(out: RunOutput) -> list[str]:
 def _coverage(out: RunOutput) -> list[str]:
     """过渡章节：每条规则当前的实现与可判定程度。"""
     groups: dict[str, list[str]] = {}
-    asks: list[str] = []
     seen: set[str] = set()
     for r in out.results:
         if r.rule_id in seen or r.kind == "advice":
             continue
         seen.add(r.rule_id)
         same = [x for x in out.results if x.rule_id == r.rule_id]
-        if r.kind == "manual":
-            key = "人工"
-            asks.append(f"  - {r.rule_id} {r.title}：{'；'.join(r.evidence)}")
-        elif any(x.status in UNKNOWN for x in same):
+        if any(x.status in UNKNOWN for x in same):
             key = "不可判定"
         else:
             key = "判定" if r.trust == "decide" else "近似"
         groups.setdefault(key, []).append(r.rule_id)
     lines = ["## 规则覆盖（过渡）", ""]
-    for key in ("判定", "近似", "不可判定", "人工"):
+    for key in ("判定", "近似", "不可判定"):
         ids = groups.get(key, [])
         lines.append(f"- {key} {len(ids)}：{' '.join(ids) or '—'}")
     if out.idle:
         lines.append(f"- 候选规则 {len(out.idle)}（无候选，未运行）：{' '.join(out.idle)}")
-    if asks:
-        lines += ["- 人工清单：", *asks]
     return [*lines, ""]
 
 
