@@ -22,7 +22,7 @@ tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 | 对象 | 内容 |
 | --- | --- |
 | `Snapshot` | 一只股票在 as_of 时点的全部输入：bars（截至 session_date）、zones、lines、absent、expired、facts、plans、fundamental、next_earnings、chain、sources |
-| `Fact` | 人的回答：value（布尔、数字或文本）、at（回答日期） |
+| `Fact` | 人的回答：value（布尔、数字或文本；日期用 ISO）、at（回答日期） |
 | `Candidate` | 候选买点：entry、stop、target、grade、evidence；计划另有 `expires`、`status`；`rr` 为计算属性 |
 | `Check` | 工具输出：`hit`（True / False / None）、evidence、`review`（近似算法）、`missing`（缺数据）、`value`（setup 取价）、`grade` |
 | `RuleResult` | 规则结果：rule_id、title、status、evidence、candidate_id、review、trust、kind |
@@ -36,7 +36,7 @@ tradesys/cli.py     薄壳：fetch / run / report / tool / tools，JSON 进出
 - **ID**：`I` 想法、`V` 不买原则（EP301 顺序），`S` 买点（EP302 顺序），`A-*` 提醒，`P-*` 原语（定义在 `*-primitives.md`，不执行）。
 - **阈值写在 rule 块里**，注释标注状态：`已裁决`（用户决定）/ `source`（原文给出）/ `默认值`（待实盘校准）。
 - **时点**：规则在 `session_date`（最近一个已收盘交易日）上求值，记为 T。
-- **实现等级**由 rule 块本身体现：普通块 = 完整实现；`trust: review` = 近似算法；依赖结构的工具在无结构时返回 MANUAL；人的回答由 `fact` / `checklist` 读取，缺失或过期 → 未知。
+- **实现等级**由 rule 块本身体现：普通块 = 完整实现；`trust: review` = 近似算法；依赖结构的工具在无结构时返回 MANUAL；人的回答由 `fact` / `checklist` 读取，缺失或过期 → 未知。各条对照 voice 的完成度见 `docs/rule-status.md`。
 
 ## 4. rule 块语法与执行语义
 
@@ -72,7 +72,7 @@ ask: 提问               # 可选：块未知时放在 evidence 首位
 4. 无计划 + 上下文阻断未知（decide 的 veto 为 MANUAL / UNAVAILABLE）→ `待回答 N 项`
 5. 其余 → `审查通过，尚无计划`
 
-setup 产出只进「系统建议买点」，不把结论写成买入。warn 未知不阻断。暂停 / 过期由 `plan_state` 计算，不存档。
+setup 产出只进「系统建议买点」，不把结论写成买入。warn 未知不阻断。暂停 / 过期由 `plan_state` 计算，不存档。**可执行** = 计划未被否决且未过期（限价可以挂着），不是「今天收盘必须买」。有多条计划时结论只看第一条。
 
 ## 6. 工具
 
@@ -104,9 +104,9 @@ setup 产出只进「系统建议买点」，不把结论写成买入。warn 未
 - `facts: {key: {value, at}}`：人的回答，载入为 `Snapshot.facts`；`idea: {reason, source, at}` 载入为 `idea.reason` / `idea.source`。
 - `plans`：人写的买点，载入为 `Candidate` 挂到 `Snapshot.plans`，与 setup 产出走同一组候选规则。`cancelled` 不载入；`expires` 省略 = `at` + 20 个交易日。`status` 只存 `active` / `cancelled`；「暂停」「过期」由报告计算（过期 = `session_date > expires`；暂停 = 该计划有 decide 的 VETO 或未知 veto，含上下文规则）。
 - 回答由两个工具读取（`tools/answer.py`）：
-  - `fact: {key, is | min | max, ttl}`：回答满足条件 → True；不给条件时只要求已回答（有 → False）。
+  - `fact: {key, is | min | max | within, ttl}`：`is` 相等；`min` / `max` 数字比较；`within: N` 则 value 为日期（`true` 表示用 `at`，`false` 表示没有），距 T 不足 N 个交易日 → True；无条件时只要求已回答（有 → False）。
   - `checklist: {keys, min, ttl}`：为「是」的项数 < min → True。
-  - 缺失或过期 → None（提问，evidence 写明要回答的 key）。`ttl` 为交易日数：回答日到 T 少于 ttl 才有效（`ttl: 1` = 只对当次 T 有效）；省略则不过期。
+  - 缺失或过期 → None（提问，evidence 写明要回答的 key）。`ttl` 为交易日数：回答日到 T 少于 ttl 才有效（`ttl: 1` = 只对当次 T 有效）；省略则不过期。`within` 看的是 value 里的日期，回答本身不过期。
 
 ## 9. 边界
 

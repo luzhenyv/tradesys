@@ -76,6 +76,16 @@ def test_v11_shrinking_new_high_vetoes():
     assert _status(run(PLAYBOOK, snap), "V11") == RuleStatus.VETO
 
 
+def test_v08_stop_date_within_5_trading_days_vetoes():
+    t = SNAP.session_date
+    recent = fake_snapshot(SNAP.bars, facts={"v08.stopped_out": Fact(t.isoformat(), t)})
+    assert _status(run(PLAYBOOK, recent), "V08") == RuleStatus.VETO
+    old = fake_snapshot(SNAP.bars, facts={"v08.stopped_out": Fact("2020-01-02", t)})
+    assert _status(run(PLAYBOOK, old), "V08") == RuleStatus.PASS
+    never = fake_snapshot(SNAP.bars, facts={"v08.stopped_out": Fact(False, t)})
+    assert _status(run(PLAYBOOK, never), "V08") == RuleStatus.PASS
+
+
 def test_human_questions_are_asked_without_answers():
     results = run(PLAYBOOK, SNAP).results
     assert {r.rule_id for r in results if r.status == RuleStatus.MANUAL} >= {

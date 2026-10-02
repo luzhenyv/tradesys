@@ -17,7 +17,7 @@
 
 # 2. 想法（I）
 
-人的回答写在档案 `facts` 中（格式见 `docs/WORKFLOW.md` §3），由 `fact` / `checklist` 读取；没有回答或已过期 → 提问，判定规则因此不给买入结论。`ttl` 为有效交易日数（默认值，可改）。
+回答写在档案里（`docs/WORKFLOW.md` §3）；`fact` / `ttl` 见 `docs/DESIGN.md` §8。
 
 ### I01 写下想法理由
 
@@ -140,13 +140,13 @@ when:
 
 ### V08 刚被打止损
 
-- **条件**：该股在最近数个交易日（默认 5）内有止损记录。日志驱动之前由人回答。
+- **条件**：最近一次止损日期距 T 不足 5 个交易日。没有止损记录则回答 `false`。日志驱动之前由人回答。
 - **来源**：EP301§R08（原文"数日"）
 ```rule
 kind: veto
-ask: 最近 5 个交易日内是否在该股上被打过止损？（回答 v08.stopped_out）
+ask: 最近一次在该股上被打止损的日期？（v08.stopped_out：日期，或 false 表示没有）
 when:
-  - fact: {key: v08.stopped_out, is: true, ttl: 1}   # 默认值
+  - fact: {key: v08.stopped_out, within: 5}   # 数日 · 默认值
 ```
 
 ### V09 不熟悉基本面、仅因跌幅大而"看似便宜"
@@ -578,12 +578,4 @@ when:
   - shooting_star: {short_shadow_ratio: 0.1}
 ```
 
-### A-INTRADAY 分时图备忘
-
-- **来源**：EP095、EP111、EP161（未入库）
-```rule
-kind: advice
-say: 分时图备忘待 EP095 / EP111 / EP161 入库
-```
-
-推迟（需要持仓数据）：A-TP 三维止盈与短期强弱（EP249）、A-LEFT 左侧建仓未满即反弹（EP292）。
+推迟：A-TP 三维止盈与短期强弱（EP249）、A-LEFT 左侧建仓未满即反弹（EP292），需持仓数据。EP095 / EP111 / EP161 分时未入库。

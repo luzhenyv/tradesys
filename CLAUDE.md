@@ -19,7 +19,7 @@
 - **规则以 voice 原文为准**：`docs/sources/voice/` 是唯一依据，summary 只作参考。
 - **测试**：测试名写原始案例；规则案例通过真实 playbook 运行，不在代码里复制规则。
 - **规模**：`tradesys/` 包约 ≤ 2200 行；超出时先简化或降级为人工。
-- **每个主题只写在一处**：README（介绍与命令）、DESIGN（系统设计）、WORKFLOW（使用流程）、playbook（交易规则）、sources（来源）。其他文件只引用，不复制。
+- **每个主题只写在一处**：README（介绍与命令）、DESIGN（系统设计）、WORKFLOW（使用流程）、playbook（交易规则）、sources（来源）、`docs/rule-status.md`（完成度与调试注意）。其他文件只引用，不复制。
 - **文档描述现状**：计划中的改动只写在 `docs/plans/`；落地的那次提交同时更新对应文档。
 - **`docs/archive/` 只读**，批量替换时排除。
 - 每步结束 `uv run pytest -q` 与 `uv run ruff check .` 都通过。

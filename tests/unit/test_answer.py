@@ -58,6 +58,17 @@ def test_unknown_condition_is_an_error():
         fact(_snap(k=Fact(True, T)), "k", iss=True)
 
 
+def test_within_uses_stop_date_not_daily_bool():
+    # T=2026-01-09 周五；within 5：不足 5 个交易日 → True
+    assert fact(_snap(k=Fact("2026-01-05", T)), "k", within=5).hit is True  # 4 日前
+    assert fact(_snap(k=Fact("2026-01-02", T)), "k", within=5).hit is False  # 5 日前
+    assert fact(_snap(k=Fact(False, T)), "k", within=5).hit is False
+    assert fact(_snap(k=Fact(True, date(2026, 1, 6))), "k", within=5).hit is True  # true → at
+    assert fact(_snap(), "k", within=5).hit is None
+    bad = fact(_snap(k=Fact("soon", T)), "k", within=5)
+    assert (bad.hit, bad.evidence) == (None, ("k 应为日期或 false，请重新回答",))
+
+
 def test_checklist_lists_missing_items():
     c = checklist(_snap(k0=Fact(True, T)), KEYS[:3], min=2, ttl=63)
     assert c.hit is None

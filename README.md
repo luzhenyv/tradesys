@@ -10,7 +10,7 @@
 - **小工具组合**：`tradesys/tools/` 中的纯函数（新低、量能、RSI、结构破位、K 线形态、Band68…）由 rule 块按名字组合调用。
 - **一只股票一份档案**：`data/tickers/<TICKER>.yaml` 写人画的结构（支撑阻力区间、趋势线、颈线、旗形）与人的回答，机器只判定。
 - **不用未来数据**：任意 as_of 回放日线；基本面、财报日、期权链只取当天。
-- **CLI 管道，JSON 进出**：每一步可单独运行，将来由 agent 用同一组命令编排。
+- **CLI 管道，JSON 进出**：每一步可单独运行。
 
 当前范围：美股主板个股、只做多、日线、盘后；数据源 yfinance。
 
@@ -43,10 +43,11 @@ uv run ruff check . && uv run ruff format .
 | `CLAUDE.md` | 开发守则 |
 | `docs/DESIGN.md` | 系统设计：分层、数据对象、rule 块语法、工具约定、数据约束 |
 | `docs/WORKFLOW.md` | 一只股票从想法到记录的流程；盯盘管道与本地日志 |
+| `docs/rule-status.md` | 18+9 条规则的完成度与调试注意 |
 | `playbooks/technical.md` | 交易规则：原则、想法（I）、不买（V）、买点（S）、提醒（A） |
 | `playbooks/technical-primitives.md` | 规则共用的原语定义（P-*） |
 | `docs/sources/` | 原始材料与 Source ID |
-| `docs/plans/` | 阶段计划；当前：`phase-2.md` |
+| `docs/plans/` | 已完成的阶段计划（`phase-2.md`） |
 | `docs/archive/` | 已被取代的旧文档，只读 |
 
 ## 目录

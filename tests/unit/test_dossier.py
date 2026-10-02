@@ -18,6 +18,7 @@ idea:
   at: 2026-01-16
 facts:
   v07.no_bad_news: {value: true, at: 2026-01-19}
+  v08.stopped_out: {value: 2026-01-15, at: 2026-01-16}
   v09.tracked: {value: 6, at: 2026-01-02}
   later: {value: true, at: 2026-02-01}
   no_date: {value: true}
@@ -70,6 +71,7 @@ def test_idea_and_facts_load_as_answers(tmp_path):
     d = _load(tmp_path, SAMPLE, date(2026, 1, 20))
     assert d.facts == {
         "v07.no_bad_news": Fact(True, date(2026, 1, 19)),
+        "v08.stopped_out": Fact("2026-01-15", date(2026, 1, 16)),
         "v09.tracked": Fact(6, date(2026, 1, 2)),
         "idea.reason": Fact("订单超预期", date(2026, 1, 16)),
         "idea.source": Fact("news", date(2026, 1, 16)),

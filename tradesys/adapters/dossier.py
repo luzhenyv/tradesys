@@ -22,6 +22,15 @@ def _as_date(v: object) -> date:
     return date.fromisoformat(str(v))
 
 
+def _fact_value(v: object) -> bool | float | str:
+    """YAML 日期写成 ISO 文本，与 Fact.value 的类型一致。"""
+    if isinstance(v, datetime):
+        return v.date().isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    return v  # type: ignore[return-value]
+
+
 def _skip(raw: dict, cutoff: date) -> bool:
     if raw.get("status") == "proposed" or "confirmed_at" not in raw:
         return True
@@ -43,7 +52,7 @@ def _facts(data: dict, cutoff: date) -> dict[str, Fact]:
         if idea.get(f):
             raw[f"idea.{f}"] = {"value": idea[f], "at": idea.get("at")}
     return {
-        k: Fact(v["value"], _as_date(v["at"]))
+        k: Fact(_fact_value(v["value"]), _as_date(v["at"]))
         for k, v in raw.items()
         if isinstance(v, dict) and "value" in v and v.get("at") is not None
         if _as_date(v["at"]) <= cutoff
