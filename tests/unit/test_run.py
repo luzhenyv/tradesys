@@ -1,6 +1,6 @@
 """执行器：规则来自 playbook，代码只提供工具。
 
-EP301 的案例全部通过真实 playbook（playbooks/technical.md）运行。
+EP301 的案例全部通过真实 workflow（playbooks/technical.md → rules.md）运行。
 """
 
 from dataclasses import replace
@@ -15,6 +15,7 @@ from tradesys.models import Candidate, Fact, Fundamental, Line, RuleStatus, Zone
 from tradesys.run import parse, run
 
 PLAYBOOK = Path(__file__).parents[2] / "playbooks" / "technical.md"
+RULES = Path(__file__).parents[2] / "playbooks" / "rules.md"
 PRIOR_20 = [100.0] + [101.0] * 19  # 前 20 日收盘最低 100
 SNAP = fake_snapshot(make_bars(PRIOR_20 + [105.0]))
 
@@ -222,6 +223,17 @@ def test_parse_rejects_misspelled_when():
         parse("### X01 t\n```rule\nkind: veto\nWhen:\n  - new_low: {n: 20}\n```\n")
 
 
+def test_workflow_unknown_node_is_an_error(tmp_path):
+    (tmp_path / "rules.md").write_text(
+        "### V01 t\n```rule\nkind: veto\nwhen:\n  - new_low: {n: 20}\n```\n",
+        encoding="utf-8",
+    )
+    wf = tmp_path / "w.md"
+    wf.write_text("```workflow\nnodes:\n  - V99\n```\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="V99"):
+        run(wf, SNAP)
+
+
 def test_parse_rejects_unknown_kind_including_removed_manual():
     with pytest.raises(ValueError, match="X01: kind"):
         parse("### X01 t\n```rule\nkind: vito\nwhen:\n  - new_low: {n: 20}\n```\n")
@@ -230,7 +242,7 @@ def test_parse_rejects_unknown_kind_including_removed_manual():
 
 
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
-    rules = {r.id: r for r in parse(PLAYBOOK.read_text(encoding="utf-8"))}
+    rules = {r.id: r for r in parse(RULES.read_text(encoding="utf-8"))}
     assert len(rules["S01"].blocks) == 2
     assert len(rules["V02"].blocks) == 1
     assert len(rules["V03"].blocks) == 3

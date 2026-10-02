@@ -6,7 +6,7 @@
 
 ## 核心功能
 
-- **规则即数据**：原语是工具函数；规则是冻结的原语组合（`playbooks/rules.md`）；策略是 workflow 节点清单（`playbooks/technical.md`、`left.md`）。换策略只换清单。
+- **规则即数据**：原语是工具函数；规则是冻结的原语组合（`playbooks/rules.md`）；策略是 workflow 节点清单（`playbooks/technical.md`）。换策略只换清单。
 - **小工具组合**：`tradesys/tools/` 中的纯函数（新低、量能、RSI、结构破位、K 线形态、Band68…）由 rule 块按名字组合调用。
 - **一只股票一份档案**：`data/tickers/<TICKER>.yaml` 写人画的结构（支撑阻力区间、趋势线、颈线、旗形）与人的回答，机器只判定。
 - **不用未来数据**：任意 as_of 回放日线；基本面、财报日、期权链只取当天。

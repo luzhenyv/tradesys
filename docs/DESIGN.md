@@ -35,8 +35,8 @@ tradesys/cli.py          薄壳：fetch / run / report / tool / tools，JSON 进
 ## 3. 规则与 Workflow
 
 - **`rules.md`**：每个 `### ID 标题` 下的 ```rule 块是一条规则（节点）。参数、`kind`、`scope`、`trust` 冻结在规则里，workflow 不覆盖。没有 rule 块的段落不执行。
-- **Workflow 文件**（`technical.md`、`left.md`）：散文 + ```workflow 的 `nodes` ID 列表。`run` 按清单到 `rules.md` 取节点。无 ```workflow 的文件仍按内嵌 rule 块执行（测试片段）。不引入节点图。
-- **ID**：`I` 想法、`V` 不买、`S` 买点、`A-*` 提醒、`L` / `A-LEFT` 左侧、`P-*` 原语（`primitives.md`，不执行）。
+- **Workflow 文件**（`technical.md`）：散文 + ```workflow 的 `nodes` ID 列表。`run` 按清单到 `rules.md` 取节点。无 ```workflow 的文件仍按内嵌 rule 块执行（测试片段）。不引入节点图。
+- **ID**：`I` 想法、`V` 不买、`S` 买点、`A-*` 提醒、`P-*` 原语（`primitives.md`，不执行）。
 - **阈值写在 rule 块里**，注释标注状态：`已裁决`（用户决定）/ `source`（原文给出）/ `默认值`（待实盘校准）。
 - **时点**：规则在 `session_date`（最近一个已收盘交易日）上求值，记为 T。
 - **实现等级**由 rule 块本身体现：普通块 = 完整实现；`trust: review` = 近似算法；依赖结构的工具在无结构时返回 MANUAL；人的回答由 `fact` / `checklist` 读取，缺失或过期 → 未知。各条对照 voice 的完成度见 `docs/rule-status.md`。
