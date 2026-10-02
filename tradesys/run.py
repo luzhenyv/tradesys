@@ -14,6 +14,30 @@ STATUS = {"veto": RuleStatus.VETO, "warn": RuleStatus.WARN, "advice": RuleStatus
 ASKS = ("manual", "todo")  # 只写 ask，不调用工具
 
 
+KINDS = {"veto", "warn", "setup", "manual", "todo", "advice"}
+KEYS = {"kind", "scope", "when", "trust", "ask", "say", "entry", "stop", "target"}
+
+
+def _validate(rule_id: str, block: dict) -> dict:
+    """拼写错误不得悄悄改变语义（如 `When:` 让 veto 变成无条件命中）。"""
+    if not isinstance(block, dict) or block.get("kind") not in KINDS:
+        raise ValueError(f"{rule_id}: kind 必须是 {sorted(KINDS)} 之一")
+    kind = block["kind"]
+    checks = (
+        (not set(block) <= KEYS, f"未知键 {sorted(set(block) - KEYS)}"),
+        (kind in ("veto", "warn", "setup") and not block.get("when"), "缺少 when"),
+        (kind == "setup" and not block.get("entry"), "缺少 entry"),
+        (kind in ASKS and not block.get("ask"), "缺少 ask"),
+        (kind == "advice" and not (block.get("say") or block.get("when")), "缺少 say 或 when"),
+        (block.get("trust") not in (None, "decide", "review", "memo"), "trust 不合法"),
+        (block.get("scope") not in (None, "candidate"), "scope 不合法"),
+    )
+    for bad, problem in checks:
+        if bad:
+            raise ValueError(f"{rule_id}: {problem}")
+    return block
+
+
 @dataclass(frozen=True)
 class Rule:
     id: str
@@ -29,7 +53,8 @@ def parse(text: str) -> list[Rule]:
         if block is not None:
             if line.strip() == "```":
                 r = rules[-1]
-                rules[-1] = Rule(r.id, r.title, (*r.blocks, yaml.safe_load("\n".join(block))))
+                parsed = _validate(r.id, yaml.safe_load("\n".join(block)))
+                rules[-1] = Rule(r.id, r.title, (*r.blocks, parsed))
                 block = None
             else:
                 block.append(line)
@@ -125,7 +150,10 @@ def evaluate_setup(rule: Rule, snap: Snapshot) -> tuple[RuleResult, Candidate | 
 
 
 def evaluate(rule: Rule, snap: Snapshot, candidate: Candidate | None = None) -> RuleResult:
-    """块按 if / elif 判断：首个命中的块决定结果；未知的块记下后继续，都不命中时报告未知。"""
+    """块按 if / elif 判断：首个命中的块决定结果；未知的块记下后继续，都不命中时报告未知。
+
+    之前有未知的 veto 块时，只有后续命中的 veto 才能取代它。
+    """
     cid = candidate.id if candidate else None
     evidence: tuple[str, ...] = ()
     review, unknown = False, None
@@ -150,6 +178,8 @@ def evaluate(rule: Rule, snap: Snapshot, candidate: Candidate | None = None) -> 
             continue
         evidence = c.evidence
         if c.hit:
+            if unknown and unknown.kind == "veto" and block["kind"] != "veto":
+                return unknown  # 可能的否决不能被较弱的命中盖掉
             said = (block["say"],) if block.get("say") else ()
             status = STATUS[block["kind"]]
             return RuleResult(
@@ -182,11 +212,13 @@ def run(playbook: str | Path, snap: Snapshot, candidates: tuple[Candidate, ...] 
     ids = [c.id for c in all_cands]
     if len(ids) != len(set(ids)):
         raise ValueError(f"候选 id 重复：{sorted(i for i in set(ids) if ids.count(i) > 1)}")
+    idle: list[str] = []
     for rule in rules:
         if rule.blocks[0].get("kind") == "setup":
             continue
         if rule.blocks[0].get("scope") == "candidate":
             results += [evaluate(rule, snap, c) for c in all_cands]
+            idle += [] if all_cands else [rule.id]
         else:
             results.append(evaluate(rule, snap))
-    return RunOutput(tuple(results), all_cands, snap)
+    return RunOutput(tuple(results), all_cands, snap, tuple(idle))

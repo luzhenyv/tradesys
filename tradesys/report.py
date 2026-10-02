@@ -25,12 +25,17 @@ def candidates(out: RunOutput, trust: str = "decide") -> list[Candidate]:
 
 
 def blockers(out: RunOutput, c: Candidate) -> tuple[list[RuleResult], list[RuleResult]]:
-    """阻断该候选的 decide 结果：(VETO, 未知)，含上下文规则与本候选的规则。"""
+    """阻断该候选的 decide 结果：(VETO, 可能是 VETO 的未知)，含上下文规则与本候选的规则。"""
     rows = [r for r in out.results if _decide(r) and r.candidate_id in (None, c.id)]
     return (
         [r for r in rows if r.status == RuleStatus.VETO],
-        [r for r in rows if r.status in UNKNOWN],
+        [r for r in rows if _blocking(r)],
     )
+
+
+def _blocking(r: RuleResult) -> bool:
+    """未知的 veto 块阻断买入；未知的 warn 块即使命中也只是 WARN，不阻断。"""
+    return _decide(r) and r.status in UNKNOWN and r.kind == "veto"
 
 
 def verdict(out: RunOutput, c: Candidate) -> str:
@@ -88,7 +93,13 @@ def _header(out: RunOutput) -> list[str]:
     if snap.next_earnings:
         n = trading_days_between(snap.session_date, snap.next_earnings)
         data.append(f"下次财报 {snap.next_earnings}（{n} 个交易日）")
-    return [*lines, "", " · ".join(data), ""]
+    if snap.structures_confirmed:
+        n = trading_days_between(snap.structures_confirmed, snap.session_date)
+        st = f"结构：确认于 {snap.structures_confirmed}（{n} 个交易日前）"
+        st += f" · absent: {', '.join(snap.absent)}" if snap.absent else ""
+    else:
+        st = "结构：无 YAML"
+    return [*lines, "", " · ".join(data), st, ""]
 
 
 def _coverage(out: RunOutput) -> list[str]:
@@ -113,6 +124,8 @@ def _coverage(out: RunOutput) -> list[str]:
     for key in ("判定", "近似", "不可判定", "占位未实现", "人工"):
         ids = groups.get(key, [])
         lines.append(f"- {key} {len(ids)}：{' '.join(ids) or '—'}")
+    if out.idle:
+        lines.append(f"- 候选规则 {len(out.idle)}（无候选，未运行）：{' '.join(out.idle)}")
     if asks:
         lines += ["- 人工清单：", *asks]
     return [*lines, ""]
@@ -138,7 +151,8 @@ def render(out: RunOutput) -> str:
 
     pending = [r for r in out.results if _decide(r) and r.status in UNKNOWN]
     if pending:
-        parts += ["## 待确认（有买点时阻断买入）", "", *map(_line, pending), ""]
+        tag = {True: "（阻断）", False: "（不阻断：warn）"}
+        parts += ["## 待确认", "", *(_line(r) + tag[_blocking(r)] for r in pending), ""]
     unsure = [r for r in out.results if r.kind == "setup" and r.status in UNKNOWN]
     if unsure:
         parts += ["## 未能评估的买点（不阻断）", "", *map(_line, unsure), ""]

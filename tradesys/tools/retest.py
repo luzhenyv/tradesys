@@ -1,4 +1,4 @@
-"""YAML 结构的突破回踩（区间与线）。无结构 → MANUAL。"""
+"""YAML 结构的突破回踩（区间与线）。无结构 → MANUAL；absent 声明不存在 → 不适用。"""
 
 from tradesys.models import Check, Line, Snapshot, Zone
 from tradesys.tools.structure import break_verdict, line_break_verdict, no_structure

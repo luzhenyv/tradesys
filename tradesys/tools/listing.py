@@ -11,7 +11,7 @@ def days_to_earnings(snap: Snapshot, max: int) -> Check:
     days = trading_days_between(snap.session_date, snap.next_earnings)
     return Check(
         0 <= days <= max,
-        (f"距财报 {days} 个交易日", f"earnings={snap.next_earnings}", "请确认无明显利空消息"),
+        (f"距财报 {days} 个交易日", f"earnings={snap.next_earnings}"),
     )
 
 

@@ -115,6 +115,7 @@ class Snapshot:
     zones: tuple[Zone, ...] = ()
     lines: tuple[Line, ...] = ()
     absent: tuple[str, ...] = ()  # 人已确认不存在的结构：zone / trendline / neckline / flag
+    structures_confirmed: date | None = None  # YAML 中最新的 confirmed_at，报告据此提示结构新旧
     fundamental: Fundamental | None = None
     next_earnings: date | None = None
     chain: Chain | None = None
@@ -180,3 +181,4 @@ class RunOutput:
     results: tuple[RuleResult, ...]
     candidates: tuple[Candidate, ...] = ()
     snapshot: Snapshot | None = None
+    idle: tuple[str, ...] = ()  # 无候选而未运行的 scope: candidate 规则

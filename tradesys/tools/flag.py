@@ -5,14 +5,17 @@ from tradesys.tools.fib import retrace
 from tradesys.tools.structure import no_structure
 from tradesys.tools.volume import state_at
 
+KINDS = ("flag_upper", "flag_lower", "flag_pole")
 
-def _flag(snap: Snapshot) -> tuple[Line, Line, Line] | None:
-    """(A 线, B 线, 旗杆)；任一缺失返回 None。旗杆 p1 = 杆底，p2 = 杆顶。"""
-    found = [[ln for ln in snap.lines if ln.kind == k] for k in ("flag_upper", "flag_lower")]
-    pole = [ln for ln in snap.lines if ln.kind == "flag_pole"]
-    if not all(found) or not pole:
-        return None
-    return found[0][0], found[1][0], pole[0]
+
+def _flag(snap: Snapshot) -> tuple[Line, Line, Line] | Check:
+    """(A 线, B 线, 旗杆)，旗杆 p1 = 杆底，p2 = 杆顶；缺失或多组时返回 Check。"""
+    found = [[ln for ln in snap.lines if ln.kind == k] for k in KINDS]
+    if not all(found):
+        return no_structure(snap, "flag")
+    if any(len(f) > 1 for f in found):
+        return Check(None, ("YAML 中有多组旗形线，请只保留当前一组",))
+    return found[0][0], found[1][0], found[2][0]
 
 
 def _avg(bars: tuple[Bar, ...]) -> float:
@@ -22,8 +25,8 @@ def _avg(bars: tuple[Bar, ...]) -> float:
 def flag_break(snap: Snapshot, pre: int) -> Check:
     """旗杆均量高于杆底前 pre 根、旗面缩量且守住旗杆 61.8%、T 收盘越过 A 线。"""
     flag = _flag(snap)
-    if flag is None:
-        return no_structure(snap, "flag")
+    if isinstance(flag, Check):
+        return flag
     a, _, p = flag
     items = snap.bars.items
     (d0, low), (d1, high) = p.p1, p.p2
@@ -54,8 +57,8 @@ def flag_break(snap: Snapshot, pre: int) -> Check:
 def buffered_flag_lower(snap: Snapshot, pct: float) -> Check:
     """B(T) × (1−pct)。"""
     flag = _flag(snap)
-    if flag is None:
-        return no_structure(snap, "flag")
+    if isinstance(flag, Check):
+        return flag
     v = flag[1].value_at(snap.session_date) * (1 - pct)
     return Check(True, (f"stop={v}",), value=v)
 
@@ -63,7 +66,7 @@ def buffered_flag_lower(snap: Snapshot, pct: float) -> Check:
 def flag_pole_high(snap: Snapshot) -> Check:
     """旗杆顶（T1），取 YAML 中 flag_pole 的 p2。"""
     flag = _flag(snap)
-    if flag is None:
-        return no_structure(snap, "flag")
+    if isinstance(flag, Check):
+        return flag
     v = flag[2].p2[1]
     return Check(True, (f"T1={v}",), value=v)

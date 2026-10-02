@@ -1,6 +1,7 @@
 # 手写范例（来自 2026-08-20 图）。strength 只存档，不参与判定。
 # kind 由人指定；现价若落在区间内也由人决定 support / resistance。
 ticker: AMD
+exchange: NMS   # 人工确认，供历史回放（DESIGN §6）
 zones:
   - id: z-506-528
     kind: resistance

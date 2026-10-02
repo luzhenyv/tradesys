@@ -114,7 +114,7 @@ def test_changing_playbook_threshold_changes_result(tmp_path):
 
 
 BLOCKS = """
-### X02 未知后仍可命中
+### X02 veto 未知不被 warn 命中盖掉
 ```rule
 kind: veto
 when:
@@ -140,6 +140,19 @@ when:
   - new_high: {n: 3}
 ```
 
+### X06 warn 未知后 veto 命中
+```rule
+kind: warn
+when:
+  - days_to_earnings: {max: 5}
+```
+
+```rule
+kind: veto
+when:
+  - new_low: {n: 3}
+```
+
 ### X04 提醒
 ```rule
 kind: advice
@@ -159,10 +172,11 @@ def test_unknown_block_does_not_stop_later_blocks(tmp_path):
     path.write_text(BLOCKS, encoding="utf-8")
     snap = fake_snapshot(make_bars([100.0, 101.0, 102.0, 99.0]))  # 无财报日；3 日新低
     rows = {r.rule_id: r for r in run(path, snap).results}
-    assert rows["X02"].status == RuleStatus.WARN
+    assert (rows["X02"].status, rows["X02"].kind) == (RuleStatus.UNAVAILABLE, "veto")
     assert rows["X03"].status == RuleStatus.UNAVAILABLE
     assert rows["X03"].trust == "decide"
     assert rows["X03"].evidence == ("缺少财报日期",)
+    assert rows["X06"].status == RuleStatus.VETO
     assert (rows["X04"].status, rows["X04"].trust, rows["X04"].evidence) == (
         RuleStatus.WARN,
         "memo",
@@ -181,6 +195,19 @@ def test_v07_uptrend_without_earnings_is_pass():
 def test_duplicate_candidate_id_is_rejected():
     with pytest.raises(ValueError, match="候选 id 重复"):
         run(PLAYBOOK, SNAP, (_cand(109, 100, cid="x"), _cand(108, 100, cid="x")))
+
+
+def test_parse_rejects_misspelled_when():
+    # 复审 Low：`When:` 不能让 veto 变成无条件命中
+    with pytest.raises(ValueError, match="X01: 未知键"):
+        parse("### X01 t\n```rule\nkind: veto\nWhen:\n  - new_low: {n: 20}\n```\n")
+
+
+def test_parse_rejects_unknown_kind_and_missing_ask():
+    with pytest.raises(ValueError, match="X01: kind"):
+        parse("### X01 t\n```rule\nkind: vito\nwhen:\n  - new_low: {n: 20}\n```\n")
+    with pytest.raises(ValueError, match="X02: 缺少 ask"):
+        parse("### X02 t\n```rule\nkind: manual\n```\n")
 
 
 def test_parse_keeps_rules_without_blocks_as_unimplemented():
@@ -279,6 +306,13 @@ def test_v10b_social_heat_asked_even_when_small_cap_warns():
     out = run(PLAYBOOK, snap)
     assert _status(out, "V10") == RuleStatus.WARN
     assert _status(out, "V10b") == RuleStatus.MANUAL
+
+
+def test_v10_unknown_exchange_small_cap_is_unavailable_not_warn():
+    # 复审 M1：是否 OTC 不知道，不能被市值 WARN 盖掉而放行
+    snap = fake_snapshot(make_bars(PRIOR_20 + [105.0]), fundamental=Fundamental(1e9, None, None))
+    (r,) = [r for r in run(PLAYBOOK, snap).results if r.rule_id == "V10"]
+    assert (r.status, r.kind) == (RuleStatus.UNAVAILABLE, "veto")
 
 
 def test_v10_missing_fundamental_is_unavailable():
@@ -520,6 +554,14 @@ def test_s03_without_pole_is_manual_and_absent_flag_is_not_applicable():
     out = run(PLAYBOOK, declared)
     assert _status(out, "S03") == RuleStatus.PASS
     assert not any(c.setup_id == "S03" for c in out.candidates)
+
+
+def test_s03_multiple_flags_is_manual():
+    # 复审 Low：YAML 中残留旧旗形时不得默默选用其中一组
+    snap = _flag_snap(20)
+    old = Line("A0", "flag_upper", (date(2025, 1, 6), 90.0), (date(2025, 1, 20), 88.0))
+    out = run(PLAYBOOK, replace(snap, lines=(*snap.lines, old)))
+    assert _status(out, "S03") == RuleStatus.MANUAL
 
 
 def test_v03_no_lines_is_manual():

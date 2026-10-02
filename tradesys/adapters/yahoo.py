@@ -9,9 +9,11 @@ pandas 只在本文件内出现，立即转换为 dataclass。
 
 from dataclasses import replace
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import yfinance as yf
 
+from tradesys.adapters.structures import DEFAULT_ROOT
 from tradesys.adapters.structures import load as load_structures
 from tradesys.calendar_utils import (
     is_monthly_opex,
@@ -113,8 +115,20 @@ def fetch_snapshot(
     )
 
 
-def attach_structures(snap: Snapshot) -> Snapshot:
-    """把已确认且 as_of 可见的 YAML 结构挂到 Snapshot 上。"""
-    zones, lines, absent = load_structures(snap.ticker, snap.session_date)
-    tag = "structures=yaml" if zones or lines or absent else "structures=none"
-    return replace(snap, zones=zones, lines=lines, absent=absent, sources=(*snap.sources, tag))
+def attach_structures(snap: Snapshot, root: Path = DEFAULT_ROOT) -> Snapshot:
+    """把已确认且 as_of 可见的 YAML 结构挂到 Snapshot 上；缺交易所代码时用 YAML 的 exchange。"""
+    st = load_structures(snap.ticker, snap.session_date, root)
+    tags = ["structures=yaml" if st.zones or st.lines or st.absent else "structures=none"]
+    fund = snap.fundamental
+    if st.exchange and (fund is None or fund.exchange is None):
+        fund = replace(fund or Fundamental(None, None, None), exchange=st.exchange)
+        tags.append("exchange=yaml")
+    return replace(
+        snap,
+        zones=st.zones,
+        lines=st.lines,
+        absent=st.absent,
+        structures_confirmed=st.confirmed,
+        fundamental=fund,
+        sources=(*snap.sources, *tags),
+    )

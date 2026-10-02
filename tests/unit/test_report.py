@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from tradesys.adapters.fake import fake_snapshot, make_bars, make_chain
-from tradesys.models import Fundamental, Zone
+from tradesys.models import Fundamental, RuleStatus, Zone
 from tradesys.report import conclusion, render, verdict
 from tradesys.run import run
 
@@ -30,7 +30,9 @@ def test_no_setup_is_no_buy_point_and_lists_coverage():
     assert conclusion(out) == "不买 · 无买点"
     md = render(out)
     assert "**不买 · 无买点**" in md
-    assert "## 待确认（有买点时阻断买入）" in md
+    assert "## 待确认" in md and "（阻断）" in md
+    assert "结构：无 YAML" in md
+    assert "候选规则 4（无候选，未运行）：V05 V12 V13 V14" in md
     assert "请在 YAML 中标注结构" in md
     assert "## 未能评估的买点（不阻断）" in md
     assert "## 规则覆盖（过渡）" in md
@@ -130,3 +132,25 @@ def test_cli_report_from_snapshot():
     assert result.exit_code == 0
     assert "# TEST ·" in result.stdout
     assert "**不买 · 无买点**" in result.stdout
+
+
+def test_unknown_warn_does_not_block_buy():
+    # 历史回放：只知道交易所（YAML exchange），市值未知 → V10 落在 warn 块，不阻断
+    snap = _s01_snap(
+        zones=(S01_ZONE, Zone("r2", "resistance", 160.0, 170.0)),
+        absent=("trendline", "neckline", "flag"),
+        fundamental=Fundamental(None, "NMS", None),
+        next_earnings=date(2026, 6, 1),
+    )
+    out = run(PLAYBOOK, snap)
+    (v10,) = [r for r in out.results if r.rule_id == "V10"]
+    assert (v10.status, v10.kind) == (RuleStatus.UNAVAILABLE, "warn")
+    assert conclusion(out) == "买（long）"
+    assert "（不阻断：warn）" in render(out)
+
+
+def test_header_shows_structure_date_and_absent():
+    snap = replace(_s01_snap(absent=("flag", "neckline")), structures_confirmed=date(2026, 1, 15))
+    md = render(run(PLAYBOOK, snap))
+    # 01-15 → 01-22，跳过 01-19 马丁·路德·金纪念日
+    assert "结构：确认于 2026-01-15（4 个交易日前） · absent: flag, neckline" in md

@@ -14,7 +14,7 @@
   - `full`：完整实现
   - `simple`：近似算法，结果 `review=True`，报告标"⚠ 近似算法，需人工复核"
   - `stub`：占位，返回 MANUAL
-  - `YAML`：结构由人在 `data/structures/<TICKER>.yaml` 中标注，无结构时返回 MANUAL；人在 `absent` 中确认不存在的结构（`zone / trendline / neckline / flag`），相关规则判为不适用（False）
+  - `YAML`：结构由人在 `data/structures/<TICKER>.yaml` 中标注，无结构时返回 MANUAL；人在 `absent` 中确认不存在的结构（`zone / trendline / neckline / flag`），相关规则判为不适用（False）。旗形线每种只保留一条；顶层 `exchange:` 为人工确认的交易所代码，供历史回放
 - **rule 块**：规则的可执行部分（语法见 DESIGN §4）。阈值就写在 rule 块里，注释标注参数名与状态（`已裁决` 用户决定 / `source` 原文给出 / `默认值` 待实盘校准）。正文中的 `veto.max_stop_pct` 等是参数的说明性名字。没有 rule 块的规则尚未实现，执行器跳过。
 - **结果状态**：`PASS / VETO / WARN / MANUAL / UNAVAILABLE`（DESIGN §3）。
 - **时点**：所有规则在 `session_date`（最近一个已收盘交易日）上求值，记为 **T**；T-1 为前一交易日。
@@ -317,6 +317,7 @@ ask: T-1 日该股跌幅是否位列所属板块成分股前 10%？（V1 不做�
 - **Source**：EP301§R07 · Voice 核对 ✔（"财报就是明天后天……突然间开始异常下跌，而且还放量了"）。`min_drop_pct` 为默认值，待校准。
 ```rule
 kind: veto
+say: 请确认无明显利空消息
 when:
   - trend: {direction: down}              # P-TREND simple · 默认实现
   - days_to_earnings: {max: 2}            # v07.earnings_window_days · 默认值
@@ -790,7 +791,6 @@ when:
 - **Source**：EP189（算法见 P-BAND68）
 ```rule
 kind: advice
-say: Band68 区间
 when:
   - band68_range: {max_strike_gap_pct: 0.02}   # band68.max_strike_gap_pct · source
 ```

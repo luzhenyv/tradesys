@@ -47,7 +47,7 @@ tradesys/cli.py     薄壳：每个工具、执行器都能单独从命令行调
   - `买（long）`：存在候选，上下文与该候选的全部 decide 规则都是 PASS / WARN。
   - `不买 · 待确认 N 项`：存在候选，但有 decide 规则 MANUAL / UNAVAILABLE（**不知道等于不买**）。
   - `不买 · 无买点`。
-- 不阻断的未知：`kind: manual` / `todo`（trust 为 memo，进人工清单）；setup 本身无法判断（只意味着可能错过买点）。
+- 不阻断的未知：`kind: manual` / `todo`（trust 为 memo，进人工清单）；未知的 warn 块（即使命中也只是 WARN）；setup 本身无法判断（只意味着可能错过买点）。只有**可能导致 VETO 的未知**阻断买入。
 - 报告（`tradesys/report.py`）是**过渡形态**：判定、待确认、未能评估的买点、参考（近似）、规则覆盖、提醒。章节随规则实现进度增减；报告只按 status / trust / kind 归类，不认识任何规则。
 
 ## 4. Playbook 与 rule 块
@@ -64,9 +64,11 @@ when:                   # 列表中全部工具 hit=True 才命中（只有 AND�
 
 - **一段可以有多个 rule 块，按顺序判断，首个命中的块决定结果**（相当于 if / elif）。都不命中 → PASS。例：V14 先 `veto rr_below 1.0`，再 `warn rr_below 1.5`。
 - **块内 AND 采用 Kleene 逻辑**：任一工具 False → 块不命中；否则有工具 `hit=None` → 块未知。setup 块例外：有 None 即未知（缺结构时不静默跳过）。
-- **未知的块不终止判断**：记下后继续下一块；后面有块命中就用它，都不命中则为 MANUAL（缺数据时为 UNAVAILABLE），evidence 只含未知工具的证据。工具因此可以诚实地返回 None。
+- **未知的块不终止判断**：记下后继续下一块；后面有块命中就用它，都不命中则为 MANUAL（缺数据时为 UNAVAILABLE），evidence 只含未知工具的证据。工具因此可以诚实地返回 None。**例外：之前有未知的 veto 块时，只有后续命中的 veto 才能取代它**（否则「可能否决」会被 warn 盖掉而放行）。
 - **`kind: manual`** 只写 `ask: 提问`，不需要任何代码，表示永久由人判断。**`kind: todo`** 写法相同，表示占位、将来要实现。
 - **`kind: advice`** 写 `say: 提醒文本`，`when` 可选（省略 = 总是提醒）。命中时进入报告「提醒」，不影响结论。
+- **`say`** 可写在任何块上，命中时放在 evidence 最前（如 V07 的「请确认无明显利空消息」）。
+- **解析时校验**：kind 必须合法；键只能是 `kind scope when trust ask say entry stop target`；veto / warn / setup 必须有 `when`，setup 必须有 `entry`，manual / todo 必须有 `ask`，advice 必须有 `say` 或 `when`。拼写错误直接报错，不会悄悄改变语义。
 - **没有 OR、没有表达式语言。** 需要 OR 就拆成两个 rule 块，或写成一个工具。
 - **阈值写在 rule 块里**，就在规则原文旁边。不另设配置文件。
 - **没有 rule 块的规则** = 尚未实现，执行器跳过。
@@ -105,6 +107,9 @@ target: {nearest_resistance: {}}     # 没有阻力则 value=None，仍产出
 - **as_of 无未来数据**：adapter 不得返回 as_of 之后才可获得的数据。yfinance 的基本面、财报日、期权链只有"现在"的值，所以只在 as_of 为今天时获取，否则为空 → `missing` → UNAVAILABLE；不得用今天的数据冒充过去。期权链另要求 session_date 收盘后尚无新的常规时段开盘（`session_open_since`），如美东 01:00 仍取前一日收盘后的报价。
 - **交易日历**：`calendar_utils.NYSE_HOLIDAYS` 列出 2025–2027 全日休市；交易日计数与月度 OpEx（休市则提前到周四）据此计算，需逐年补充。
 - **结构由人画**：支撑阻力区间、趋势线、颈线、旗形（旗杆 `flag_pole` + A/B 线 `flag_upper` / `flag_lower`）来自 `data/structures/<TICKER>.yaml`，机器只判定，不自动识别。
+- **一种旗形线只保留一条**：`flag_upper / flag_lower / flag_pole` 任一种出现多条 → MANUAL，请删除旧旗形。
+- **结构的新旧由人判断**：报告头列出 YAML 最新 `confirmed_at`、距今交易日数与 absent 列表，不自动判过期。
+- **交易所代码可由人给出**：YAML 顶层 `exchange: NMS`，只在取不到当天基本面时补上（`exchange=yaml`），供历史回放；市值仍只取当天。
 - **结构由人声明不存在**：YAML 顶层 `absent: [{kind, confirmed_at}]`（kind 为 `zone / trendline / neckline / flag`），载入为 `Snapshot.absent`。缺少该结构时工具经 `no_structure()` 返回 False（不适用），而不是 None。`tradesys fetch` 按 `confirmed_at ≤ session_date` 载入；`status: proposed` 的条目不进入 Snapshot（手写省略 status = 已确认）。`strength` / `note` / `source` 等多余键忽略，供人阅读与将来「生成 + 复核」。无结构时相关规则 MANUAL，不是 UNAVAILABLE。
 
 ## 7. 编排

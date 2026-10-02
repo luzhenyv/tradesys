@@ -1,6 +1,6 @@
 # Phase 1 — 第一份可用的交易备忘录
 
-> 状态：①–⑥ 已完成。
+> 状态：①–⑦ 已完成，Phase 1 完成（2026-10-02）。
 > 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report playbooks/technical.md` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
@@ -70,6 +70,18 @@
 - **数据**：期权链条件改为「session_date 收盘后尚无新开盘」（#8）；NYSE 2025–2027 休市表、交易日计数、Good Friday OpEx。
 - **Low**：V10b 社群热度独立成条；`bullish_engulfing` 去掉无效的 tier；`fib_broken` 在破位窗口之前取上涨段；retest 公共骨架合并。
 - **预算**：DESIGN §9 有意上调为约 ≤ 2200 行（#9）。
+
+## ⑦ 复审修复 ✅（2026-10-02，40c031a 之后）
+
+- **M1**：之前有未知的 veto 块时，只有后续命中的 veto 能取代它（V10：exchange 未知 + 小市值不再是 WARN）。未知的 warn 块不阻断买入。
+- **M2**：报告头加一行结构信息（确认日期、距今交易日、absent），不自动判过期。
+- **M3**：YAML 顶层 `exchange:` 由人确认，历史回放时补上交易所代码；`load()` 改为返回 `Structures`。
+- **Low**：
+  - `parse` 校验 rule 块。
+  - 规则覆盖列出无候选而未运行的候选规则（`RunOutput.idle`）。
+  - 多组旗形线 → MANUAL。
+  - A-BAND68 去掉重复的 say；「请确认无明显利空消息」移到 V07 的 say。
+  - 修正 retest docstring。
 
 ## 不在 Phase 1
 
