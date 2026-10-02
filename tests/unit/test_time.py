@@ -175,7 +175,7 @@ def test_cli_fetch_time_options(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(
         app,
-        ["fetch", "META", "--as-of", "2026-10-01T17:00", "--tz", "Asia/Shanghai"],
+        ["fetch", "AMD", "--as-of", "2026-10-01T17:00", "--tz", "Asia/Shanghai"],
     )
     assert result.exit_code == 0
     # 2026-10-01 17:00 CST -> 2026-10-01 09:00 UTC

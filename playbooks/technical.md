@@ -533,7 +533,7 @@ when:
      - A：T 日在区间内出现止跌形态（P-CANDLE）
      - B：T 日出现放量阳线（`close > open` 且 `expand`）
 - **Stop**：`zone.low × (1 − stop.buffer_pct)`
-- **Source**：EP302§B1 · Voice 核对 ✔（案例：META 638–680 区间）
+- **Source**：EP302§B1 · Voice 核对 ✔（案例：AMD 638–680 区间）
 ```rule
 kind: setup
 when:

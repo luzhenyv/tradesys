@@ -30,7 +30,7 @@ def test_bars_from_history_converts_and_drops_nan_close():
             ("2026-10-01", 728.5, 735.8, 722.1, 731.6, 9.8e6),
         ]
     )
-    bars = bars_from_history("META", df)
+    bars = bars_from_history("AMD", df)
     assert [b.d for b in bars.items] == [date(2026, 9, 29), date(2026, 10, 1)]
     assert bars.last.close == 731.6 and isinstance(bars.last.volume, float)
 
@@ -67,15 +67,15 @@ def test_chain_keeps_strikes_near_close_and_feeds_band68():
 def test_fetch_rejects_future_as_of_before_any_network_call():
     now = datetime(2026, 10, 1, 11, 0, tzinfo=ET)
     with pytest.raises(ValueError, match="晚于当前时间"):
-        fetch_snapshot("META", datetime(2026, 10, 1, 17, 0, tzinfo=ET), now=now)
+        fetch_snapshot("AMD", datetime(2026, 10, 1, 17, 0, tzinfo=ET), now=now)
     with pytest.raises(ValueError, match="晚于当前时间"):
         # naive 视为 UTC（17:00 UTC = 13:00 EDT > 11:00 EDT）
-        fetch_snapshot("META", datetime(2026, 10, 1, 17, 0), now=now)
+        fetch_snapshot("AMD", datetime(2026, 10, 1, 17, 0), now=now)
 
 
 @pytest.mark.network
-def test_fetch_meta_live_runs_through_playbook():
-    snap = fetch_snapshot("META", datetime.now(ET))
+def test_fetch_AMD_live_runs_through_playbook():
+    snap = fetch_snapshot("AMD", datetime.now(ET))
     assert len(snap.bars.items) > 200
     assert snap.fundamental is not None and snap.fundamental.market_cap > 1e11
     results = run("playbooks/technical.md", snap).results
@@ -84,7 +84,7 @@ def test_fetch_meta_live_runs_through_playbook():
 
 @pytest.mark.network
 def test_fetch_past_as_of_has_no_present_only_data():
-    snap = fetch_snapshot("META", datetime(2026, 9, 1, 17, 0, tzinfo=ET))
+    snap = fetch_snapshot("AMD", datetime(2026, 9, 1, 17, 0, tzinfo=ET))
     assert snap.session_date == date(2026, 9, 1)
     assert (snap.fundamental, snap.next_earnings, snap.chain) == (None, None, None)
 

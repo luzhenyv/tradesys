@@ -373,11 +373,11 @@ data_sources = {
     "options": "yahoo",
     "calendar": "yahoo",
     "fundamental": "yahoo",
-    "structures": "data/structures/META.yaml",
+    "structures": "data/structures/AMD.yaml",
 }
 ```
 
-发生 fallback 时记录为 `"market": "yahoo (fallback: ibkr unavailable)"`。该字典进入 `AnalysisContext` 与报告 metadata。
+发生 fallback 时记录为 `"market": "yahoo (fallback: ibkr unavailable)"`。该字典进入 `AnalysisContext` 与报告 AMDdata。
 
 ---
 
@@ -386,8 +386,8 @@ data_sources = {
 结构（支撑阻力区间、趋势线、颈线、旗形 A/B 线）**由人在 YAML 中标注，机器只做判定**（§2.8）。YAML 可 diff、可复盘：
 
 ```yaml
-# data/structures/META.yaml（格式示例；trendline 数值为虚构）
-ticker: META
+# data/structures/AMD.yaml（格式示例；trendline 数值为虚构）
+ticker: AMD
 zones:
   - id: z-638-680
     kind: support
@@ -589,8 +589,8 @@ vetoes:
 ```
 
 ```bash
-tradesys analyze META                        # 正常
-tradesys experiment META --disable-veto v11  # 实验（V1 可不实现）
+tradesys analyze AMD                        # 正常
+tradesys experiment AMD --disable-veto v11  # 实验（V1 可不实现）
 ```
 
 ---
@@ -649,7 +649,7 @@ V1 只输出 Markdown：
 
 ```text
 Trading Memo
-├── Analysis Metadata      ticker, as_of, session_date, data sources, config
+├── Analysis AMDdata      ticker, as_of, session_date, data sources, config
 ├── Conclusion             不买 / 待人工确认 / 存在候选买点
 ├── Market Overview
 ├── Features
@@ -659,7 +659,7 @@ Trading Memo
 ├── Manual Checklist       所有 manual / unavailable 项
 ├── Setup Candidates       含 candidate veto 结果
 ├── Advice / Reminder
-└── System Metadata        enabled features / setups, disabled vetoes, simple / stub 规则清单
+└── System AMDdata        enabled features / setups, disabled vetoes, simple / stub 规则清单
 ```
 
 报告本身是一份**可审计的交易决策记录**。

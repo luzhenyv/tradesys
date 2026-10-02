@@ -1,7 +1,7 @@
 # Phase 1 — 第一份可用的交易备忘录
 
 > 状态：①–⑦ 已完成，Phase 1 完成（2026-10-02）。
-> 目标：`tradesys fetch META | tradesys run playbooks/technical.md | tradesys report playbooks/technical.md` 输出完整的交易备忘录。
+> 目标：`tradesys fetch AMD | tradesys run playbooks/technical.md | tradesys report playbooks/technical.md` 输出完整的交易备忘录。
 > 约束：遵守 `docs/DESIGN.md`。每一步先在 playbook 中写好 rule 块，缺什么工具再补什么工具；执行器只在 rule 块语法确实不够用时才改。
 
 每一步结束时 `uv run pytest -q` 与 `uv run ruff check .` 都通过。
